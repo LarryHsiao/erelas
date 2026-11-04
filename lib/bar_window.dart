@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/painting.dart';
 import 'package:nativeapi/nativeapi.dart' show DisplayManager;
 import 'package:window_manager/window_manager.dart';
@@ -16,8 +18,11 @@ Window configureBarWindow() {
   final area = display.workArea.toRect();
   window.setFrameless(true);
   window.isAlwaysOnTop = true;
-  window.isVisibleOnAllWorkspaces = true;
-  window.setVisibleOnFullScreen(true);
+  if (Platform.isMacOS) {
+    window.isVisibleOnAllWorkspaces = true;
+    window.setVisibleOnFullScreen(true);
+  }
+  if (Platform.isWindows) window.isVisibleInTaskbar = false;
   window.isResizable = false;
   window.bounds = Rect.fromLTWH(
     area.left,
