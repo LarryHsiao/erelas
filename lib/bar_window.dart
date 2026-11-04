@@ -3,6 +3,7 @@ import 'package:nativeapi/nativeapi.dart' show DisplayManager;
 import 'package:window_manager/window_manager.dart';
 
 import 'bar_view.dart';
+import 'detail_panel.dart';
 
 /// Turns the app window into a borderless, always-on-top bar docked to the
 /// top of the primary display's work area, on every Space.
@@ -26,4 +27,17 @@ Window configureBarWindow() {
   ).toNative();
   window.show();
   return window;
+}
+
+/// Grows the bar's window downward to hold the detail drawer, or shrinks it
+/// back. Left, top and width stay where they are.
+void resizeBar(Window window, {required bool expanded}) {
+  final bounds = window.bounds.toRect();
+  final height = expanded ? barHeight + detailHeight : barHeight;
+  window.bounds = Rect.fromLTWH(
+    bounds.left,
+    bounds.top,
+    bounds.width,
+    height,
+  ).toNative();
 }

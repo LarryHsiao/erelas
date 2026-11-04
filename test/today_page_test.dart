@@ -8,13 +8,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<Today> loadFixture() async => Today.fromJson(
-    jsonDecode(File('test/fixtures/today_v1.json').readAsStringSync())
-        as Map<String, dynamic>);
+  jsonDecode(File('test/fixtures/today_v1.json').readAsStringSync())
+      as Map<String, dynamic>,
+);
 
 Future<Today> loadFailure() async => throw Exception('offline');
 
-Future<void> pumpPage(WidgetTester tester, Future<Today> Function() load) async {
-  await tester.pumpWidget(MaterialApp(home: TodayPage(load: load)));
+Future<void> pumpPage(
+  WidgetTester tester,
+  Future<Today> Function() load,
+) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: TodayPage(load: load, expanded: ValueNotifier(false)),
+    ),
+  );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 50));
 }
@@ -38,7 +46,9 @@ void main() {
     expect(change.style?.color, downColor);
   });
 
-  testWidgets('a failed load shows a dash, not an error screen', (tester) async {
+  testWidgets('a failed load shows a dash, not an error screen', (
+    tester,
+  ) async {
     await pumpPage(tester, loadFailure);
     expect(find.text('TAIEX —'), findsOneWidget);
   });

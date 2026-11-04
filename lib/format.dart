@@ -19,3 +19,11 @@ String formatChange(double change) {
   final sign = change > 0 ? '+' : '−';
   return '$sign${formatPrice(change.abs())}';
 }
+
+final RegExp _isoMinute = RegExp(r'^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})');
+
+/// "2026-11-04T12:28:23+08:00" → "2026-11-04 12:28"; anything else as given.
+String formatAsOf(String asOf) {
+  final match = _isoMinute.firstMatch(asOf);
+  return match == null ? asOf : '${match[1]} ${match[2]}';
+}
