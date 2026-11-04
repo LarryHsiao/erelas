@@ -17,7 +17,6 @@ class DetailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final index = today.index;
-    final color = index.change >= 0 ? upColor : downColor;
     return Container(
       height: detailHeight,
       width: double.infinity,
@@ -27,28 +26,12 @@ class DetailPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 14,
-              crossAxisAlignment: WrapCrossAlignment.end,
-              children: [
-                Text(
-                  formatPrice(index.close),
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${formatChange(index.change)}  ${formatMove(index.changePct)}',
-                  style: TextStyle(fontSize: 16, color: color),
-                ),
-              ],
-            ),
+            _header(index),
             Text('Index close · ${index.date}'),
-            Text(sourceLabel),
+            const Text(sourceLabel),
             Text(
               'Updated ${formatAsOf(today.asOf)}',
-              style: const TextStyle(color: Colors.white60),
+              style: const TextStyle(color: mutedColor),
             ),
             if (today.ticker.isNotEmpty) _list(),
           ],
@@ -56,6 +39,24 @@ class DetailPanel extends StatelessWidget {
       ),
     );
   }
+
+  Widget _header(IndexQuote index) => Wrap(
+    spacing: 14,
+    crossAxisAlignment: WrapCrossAlignment.end,
+    children: [
+      Text(
+        formatPrice(index.close),
+        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600),
+      ),
+      Text(
+        '${formatChange(index.change)}  ${formatMove(index.changePct)}',
+        style: TextStyle(
+          fontSize: 16,
+          color: index.change >= 0 ? upColor : downColor,
+        ),
+      ),
+    ],
+  );
 
   Widget _list() => Padding(
     padding: const EdgeInsets.only(top: 10),

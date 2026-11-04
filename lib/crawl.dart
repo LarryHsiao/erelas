@@ -61,7 +61,7 @@ class _CrawlState extends State<Crawl> with SingleTickerProviderStateMixin {
       .copyWith(fontSize: crawlFontSize);
 
   void _configure() {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (MediaQuery.disableAnimationsOf(context) || widget.items.isEmpty) {
       _belt.stop();
       return;
     }
@@ -74,7 +74,7 @@ class _CrawlState extends State<Crawl> with SingleTickerProviderStateMixin {
     painter.dispose();
     final millis = (_span / crawlSpeed * 1000).round();
     _belt.duration = Duration(milliseconds: millis < 1 ? 1 : millis);
-    if (!_belt.isAnimating) _belt.repeat();
+    _belt.repeat(); // continues from the current value, at the new period
   }
 
   @override

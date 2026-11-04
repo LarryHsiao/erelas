@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:nativeapi/nativeapi.dart'
     show
         Application,
@@ -18,8 +19,15 @@ String toggleLabel(bool barVisible) => barVisible ? 'Hide bar' : 'Show bar';
 /// Native handles must outlive [installTray] or the menu-bar item vanishes.
 final List<Object> _alive = [];
 
-/// A menu-bar item whose menu hides or shows the bar, and quits the app.
-void installTray(Window window) {
+typedef _Handles = ({
+  TrayIcon tray,
+  Menu menu,
+  MenuItem toggle,
+  MenuItem divider,
+  MenuItem quit,
+});
+
+_Handles _createHandles() {
   final tray = TrayIcon.create();
   final menu = Menu.create();
   final toggle = MenuItem.createWithLabelAndType(
@@ -35,25 +43,36 @@ void installTray(Window window) {
       quit == null) {
     throw StateError('the native tray or menu could not be created');
   }
-  toggle.addListener((event) {
+  return (tray: tray, menu: menu, toggle: toggle, divider: divider, quit: quit);
+}
+
+void _listen(_Handles h, Window window, ValueNotifier<bool> expanded) {
+  h.toggle.addListener((event) {
     if (event is! MenuItemClickedEvent) return;
     if (window.isVisible) {
+      expanded.value = false; // never leave the drawer open behind a hidden bar
       window.hide();
     } else {
       window.show();
     }
-    toggle.label = toggleLabel(window.isVisible);
+    h.toggle.label = toggleLabel(window.isVisible);
   });
-  quit.addListener((event) {
+  h.quit.addListener((event) {
     if (event is MenuItemClickedEvent) Application.instance.quit(0);
   });
-  for (final item in [toggle, divider, quit]) {
-    menu.addItem(item);
+}
+
+/// A menu-bar item whose menu hides or shows the bar, and quits the app.
+void installTray(Window window, ValueNotifier<bool> expanded) {
+  final h = _createHandles();
+  _listen(h, window, expanded);
+  for (final item in [h.toggle, h.divider, h.quit]) {
+    h.menu.addItem(item);
   }
-  tray
+  h.tray
     ..setTitle(trayTitle)
     ..setTooltip(trayTooltip)
-    ..setContextMenu(menu)
+    ..setContextMenu(h.menu)
     ..setContextMenuTrigger(ContextMenuTrigger.clicked);
-  _alive.addAll([tray, menu, toggle, divider, quit]);
+  _alive.addAll([h.tray, h.menu, h.toggle, h.divider, h.quit]);
 }

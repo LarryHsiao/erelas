@@ -27,6 +27,12 @@ Future<void> pumpPage(
   await tester.pump(const Duration(milliseconds: 50));
 }
 
+Today withClose(double close) => Today(
+    index: IndexQuote(
+        date: '2026-11-04', name: 'x', close: close, change: 1, changePct: 1),
+    ticker: const [],
+    asOf: '2026-11-04T12:00:00+08:00');
+
 void main() {
   testWidgets('shows the close, change, date and source', (tester) async {
     const expected = [
@@ -51,5 +57,30 @@ void main() {
   ) async {
     await pumpPage(tester, loadFailure);
     expect(find.text('TAIEX —'), findsOneWidget);
+  });
+
+  testWidgets('a failed load still shows the source', (tester) async {
+    await pumpPage(tester, loadFailure);
+    expect(find.text('Source: TWSE'), findsOneWidget);
+  });
+
+  testWidgets('the bar reloads on the refresh interval', (tester) async {
+    var calls = 0;
+    Future<Today> load() async => withClose(++calls == 1 ? 100 : 200);
+    await pumpPage(tester, load);
+    expect(find.text('TAIEX 100.00'), findsOneWidget);
+    await tester.pump(refreshInterval + const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.text('TAIEX 200.00'), findsOneWidget);
+  });
+
+  testWidgets('a failed refresh keeps the last good values', (tester) async {
+    var calls = 0;
+    Future<Today> load() async =>
+        ++calls == 1 ? withClose(100) : throw Exception('offline');
+    await pumpPage(tester, load);
+    await tester.pump(refreshInterval + const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.text('TAIEX 100.00'), findsOneWidget);
   });
 }

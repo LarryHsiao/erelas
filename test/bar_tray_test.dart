@@ -9,8 +9,4 @@ void main() {
   test('a hidden bar offers to show itself', () {
     expect(toggleLabel(false), 'Show bar');
   });
-
-  test('quitting has its own fixed label', () {
-    expect(quitLabel, 'Quit Erelas');
-  });
 }

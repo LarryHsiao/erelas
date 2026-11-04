@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:window_manager/window_manager.dart' show WindowBlurredEvent;
 
 import 'bar_tray.dart';
 import 'bar_view.dart';
@@ -7,13 +10,18 @@ import 'bar_window.dart';
 import 'detail_panel.dart';
 import 'fetch_today.dart';
 import 'today.dart';
-import 'package:window_manager/window_manager.dart' show WindowBlurredEvent;
+
+const Duration refreshInterval = Duration(minutes: 15);
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final window = configureBarWindow();
-  installTray(window);
   final expanded = ValueNotifier(false);
+  try {
+    installTray(window, expanded);
+  } on StateError catch (error) {
+    debugPrint('menu-bar item unavailable, the bar runs without it: $error');
+  }
   expanded.addListener(() => resizeBar(window, expanded: expanded.value));
   window.addListener((event) {
     if (event is WindowBlurredEvent) expanded.value = false;
@@ -60,11 +68,19 @@ class TodayPage extends StatefulWidget {
 class _TodayPageState extends State<TodayPage> {
   Today? _today;
   Object? _error;
+  Timer? _refresh;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _refresh = Timer.periodic(refreshInterval, (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _refresh?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -101,11 +117,19 @@ class _TodayPageState extends State<TodayPage> {
   Widget _placeholder() => Container(
     height: barHeight,
     color: barColor,
-    alignment: Alignment.centerLeft,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    child: Text(
-      _error == null ? 'TAIEX …' : 'TAIEX —',
-      style: const TextStyle(fontWeight: FontWeight.w600),
+    padding: const EdgeInsets.symmetric(horizontal: barPadding),
+    child: Row(
+      children: [
+        Text(
+          _error == null ? '$indexLabel …' : '$indexLabel —',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const Spacer(),
+        const Text(
+          sourceLabel,
+          style: TextStyle(fontSize: 11, color: mutedColor),
+        ),
+      ],
     ),
   );
 }

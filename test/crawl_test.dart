@@ -82,4 +82,46 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     expect(tester.binding.transientCallbackCount, 0);
   });
+
+  testWidgets('with no items the controller does not run', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(body: SizedBox(width: 400, height: barHeight, child: Crawl(items: []))),
+    ));
+    expect(tester.binding.transientCallbackCount, 0);
+  });
+
+  testWidgets('turning reduced motion on at runtime stops the belt',
+      (tester) async {
+    Widget app(bool reduce) => MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: reduce),
+            child: const Scaffold(
+              body: SizedBox(width: 400, height: barHeight, child: Crawl(items: items)),
+            ),
+          ),
+        );
+    await tester.pumpWidget(app(false));
+    expect(find.byKey(crawlBeltKey), findsOneWidget);
+    await tester.pumpWidget(app(true));
+    await tester.pump();
+    expect(find.byKey(crawlBeltKey), findsNothing);
+    expect(tester.binding.transientCallbackCount, 0);
+  });
+
+  testWidgets('turning reduced motion off at runtime restarts the belt',
+      (tester) async {
+    Widget app(bool reduce) => MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: reduce),
+            child: const Scaffold(
+              body: SizedBox(width: 400, height: barHeight, child: Crawl(items: items)),
+            ),
+          ),
+        );
+    await tester.pumpWidget(app(true));
+    await tester.pumpWidget(app(false));
+    final before = beltLeft(tester);
+    await tester.pump(const Duration(seconds: 2));
+    expect(beltLeft(tester), lessThan(before));
+  });
 }
