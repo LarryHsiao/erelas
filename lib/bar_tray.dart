@@ -1,8 +1,11 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:nativeapi/nativeapi.dart'
     show
         Application,
         ContextMenuTrigger,
+        Image,
         Menu,
         MenuItem,
         MenuItemClickedEvent,
@@ -13,8 +16,25 @@ import 'package:window_manager/window_manager.dart' show Window;
 const String trayTitle = '◆';
 const String trayTooltip = 'Erelas';
 const String quitLabel = 'Quit Erelas';
+const String trayIconFile = 'tray_icon.png';
 
 String toggleLabel(bool barVisible) => barVisible ? 'Hide bar' : 'Show bar';
+
+/// Where the tray icon lies beside a built app: the executable's directory,
+/// then `data/flutter_assets/assets/tray_icon.png`. Windows draws no title in
+/// its tray, so it needs the image. The path is built with [separator], the
+/// platform's by default.
+String trayIconPath(String executable, {String? separator}) {
+  final sep = separator ?? Platform.pathSeparator;
+  final cut = executable.lastIndexOf(sep);
+  return [
+    if (cut > 0) executable.substring(0, cut),
+    'data',
+    'flutter_assets',
+    'assets',
+    trayIconFile,
+  ].join(sep);
+}
 
 /// Native handles must outlive [installTray] or the menu-bar item vanishes.
 final List<Object> _alive = [];
@@ -69,10 +89,24 @@ void installTray(Window window, ValueNotifier<bool> expanded) {
   for (final item in [h.toggle, h.divider, h.quit]) {
     h.menu.addItem(item);
   }
+  _showMark(h.tray);
   h.tray
-    ..setTitle(trayTitle)
     ..setTooltip(trayTooltip)
     ..setContextMenu(h.menu)
     ..setContextMenuTrigger(ContextMenuTrigger.clicked);
   _alive.addAll([h.tray, h.menu, h.toggle, h.divider, h.quit]);
+}
+
+/// macOS draws a text title in the menu bar; Windows draws only an icon.
+void _showMark(TrayIcon tray) {
+  if (Platform.isMacOS) {
+    tray.setTitle(trayTitle);
+    return;
+  }
+  final icon = Image.fromFile(trayIconPath(Platform.resolvedExecutable));
+  if (icon == null) throw StateError('the tray icon image could not be loaded');
+  tray
+    ..icon = icon
+    ..isIconTemplate = true;
+  _alive.add(icon);
 }

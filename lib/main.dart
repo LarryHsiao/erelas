@@ -19,8 +19,9 @@ void main() {
   final expanded = ValueNotifier(false);
   try {
     installTray(window, expanded);
-  } on StateError catch (error) {
-    debugPrint('menu-bar item unavailable, the bar runs without it: $error');
+  } catch (error) {
+    debugPrint('tray item unavailable, giving the bar its frame back: $error');
+    restoreFrame(window);
   }
   expanded.addListener(() => resizeBar(window, expanded: expanded.value));
   window.addListener((event) {
