@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 108 108">
+  <defs>
+    <linearGradient id="flame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#b3141b"/><stop offset="1" stop-color="#ff4a2e"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ff4a2e" stop-opacity="0.35"/><stop offset="1" stop-color="#ff4a2e" stop-opacity="0"/></radialGradient>
+  </defs>
+  <g transform="translate(16.7 20.9) scale(0.35)">
+    <circle cx="100" cy="100" r="62" fill="url(#glow)"/>
+    <path d="M106 34 C110 60 144 84 136 122 C130 142 116 150 100 150 C84 150 68 140 66 120 C65 106 74 96 82 82 C84 94 90 100 96 98 C90 76 96 54 106 34Z" fill="url(#flame)"/>
+    <polyline points="40,150 70,128 92,138 118,100 142,112 168,62" fill="none" stroke="#ffe3c0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="168" cy="62" r="10" fill="#ffe3c0"/>
+  </g>
+</svg>

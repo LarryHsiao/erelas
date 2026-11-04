@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="33.5 20 150 150">
+  <defs>
+    <mask id="gap" maskUnits="userSpaceOnUse" x="0" y="0" width="220" height="200">
+      <rect width="220" height="200" fill="#fff"/>
+      <polyline points="40,150 70,128 92,138 118,100 142,112 168,62" fill="none" stroke="#000" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <path mask="url(#gap)" d="M106 34 C110 60 144 84 136 122 C130 142 116 150 100 150 C84 150 68 140 66 120 C65 106 74 96 82 82 C84 94 90 100 96 98 C90 76 96 54 106 34Z" fill="#fff"/>
+  <polyline points="40,150 70,128 92,138 118,100 142,112 168,62" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="168" cy="62" r="13" fill="#fff"/>
+</svg>
