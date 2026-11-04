@@ -1,2 +1,10 @@
 __pycache__/
 *.pyc
+.fvm/
+.dart_tool/
+.idea/
+*.iml
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
