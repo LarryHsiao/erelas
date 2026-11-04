@@ -34,23 +34,25 @@ Window configureBarWindow() {
   return window;
 }
 
-/// Grows the bar's window downward to hold the detail drawer, or shrinks it
-/// back. Left, top and width stay where they are.
-void resizeBar(Window window, {required bool expanded}) {
-  final bounds = window.bounds.toRect();
+/// The content area for the bar, closed or holding the detail drawer. Left,
+/// top and width stay where they are.
+Rect barContent(Rect current, {required bool expanded}) {
   final height = expanded ? barHeight + detailHeight : barHeight;
-  window.bounds = Rect.fromLTWH(
-    bounds.left,
-    bounds.top,
-    bounds.width,
-    height,
-  ).toNative();
+  return Rect.fromLTWH(current.left, current.top, current.width, height);
+}
+
+/// Grows the bar's window downward to hold the detail drawer, or shrinks it
+/// back. It sizes the content area, so a framed window (see [restoreFrame])
+/// keeps its title bar outside the bar's own height.
+void resizeBar(Window window, {required bool expanded}) {
+  final content = window.contentBounds.toRect();
+  window.contentBounds = barContent(content, expanded: expanded).toNative();
 }
 
 /// Gives the window its frame back, and with it a close button. Used when the
 /// menu-bar or tray item could not be made: a frameless, always-on-top bar
 /// with no tray has no other way to be hidden or quit. The content area keeps
-/// the bar's height, so the title bar grows the window instead of eating the bar.
+/// the bar's height, so the title bar grows the window instead of eating it.
 void restoreFrame(Window window) {
   window.setFrameless(false);
   window.isResizable = true;
