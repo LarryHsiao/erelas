@@ -1,0 +1,46 @@
+name: publish-today
+
+# TWSE closes at 13:30 Taipei (05:30 UTC). Several runs after the close,
+# off the hour, because scheduled runs can start late or be dropped.
+# The exact time MI_INDEX updates after the close is unmeasured.
+on:
+  schedule:
+    - cron: "47 6 * * 1-5"
+    - cron: "47 7 * * 1-5"
+    - cron: "47 9 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-today
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test the writer
+        run: python3 -I -m unittest discover -s writer
+
+      # Exits non-zero on any bad input; docs/today.json then stays as it was.
+      - name: Build today.json
+        run: python3 -I writer/build_today.py docs/today.json
+
+      - name: Commit when the data changed
+        run: |
+          if git diff --quiet -- docs/today.json && \
+             [ -z "$(git ls-files --others --exclude-standard docs/today.json)" ]; then
+            echo "no change"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/today.json
+          git commit -m "data: today.json"
+          git pull --rebase
+          git push
