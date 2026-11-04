@@ -6,7 +6,7 @@ import 'bar_view.dart';
 
 /// Turns the app window into a borderless, always-on-top bar docked to the
 /// top of the primary display's work area, on every Space.
-void configureBarWindow() {
+Window configureBarWindow() {
   final window = WindowManager.instance.getCurrent();
   final display = DisplayManager.instance.getPrimary();
   if (window == null || display == null) {
@@ -18,7 +18,12 @@ void configureBarWindow() {
   window.isVisibleOnAllWorkspaces = true;
   window.setVisibleOnFullScreen(true);
   window.isResizable = false;
-  window.bounds =
-      Rect.fromLTWH(area.left, area.top, area.width, barHeight).toNative();
+  window.bounds = Rect.fromLTWH(
+    area.left,
+    area.top,
+    area.width,
+    barHeight,
+  ).toNative();
   window.show();
+  return window;
 }
