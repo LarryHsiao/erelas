@@ -46,3 +46,11 @@ void resizeBar(Window window, {required bool expanded}) {
     height,
   ).toNative();
 }
+
+/// Gives the window its frame back, and with it a close button. Used when the
+/// menu-bar or tray item could not be made: a frameless, always-on-top bar
+/// with no tray has no other way to be hidden or quit.
+void restoreFrame(Window window) {
+  window.setFrameless(false);
+  window.isResizable = true;
+}

@@ -21,8 +21,9 @@ const String trayIconFile = 'tray_icon.png';
 String toggleLabel(bool barVisible) => barVisible ? 'Hide bar' : 'Show bar';
 
 /// Where the tray icon lies beside a built app: the executable's directory,
-/// then `data/flutter_assets/assets/tray_icon.png`. Windows has no menu-bar title to draw, so it needs
-/// the image; the path is built with [separator] (the platform's by default).
+/// then `data/flutter_assets/assets/tray_icon.png`. Windows draws no title in
+/// its tray, so it needs the image. The path is built with [separator], the
+/// platform's by default.
 String trayIconPath(String executable, {String? separator}) {
   final sep = separator ?? Platform.pathSeparator;
   final cut = executable.lastIndexOf(sep);
