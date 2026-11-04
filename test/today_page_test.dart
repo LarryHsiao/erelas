@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:erelas/bar_view.dart';
 import 'package:erelas/main.dart';
 import 'package:erelas/today.dart';
 import 'package:flutter/material.dart';

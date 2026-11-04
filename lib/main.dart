@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'bar_view.dart';
+import 'bar_window.dart';
 import 'fetch_today.dart';
-import 'format.dart';
 import 'today.dart';
 
-/// Taiwan convention: red is up, green is down. Open question with the owner.
-const Color upColor = Color(0xFFC0392B);
-const Color downColor = Color(0xFF2F7D3A);
-const String sourceLabel = 'Source: TWSE';
-
-void main() => runApp(const ErelasApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  configureBarWindow();
+  runApp(const ErelasApp());
+}
 
 class ErelasApp extends StatelessWidget {
   const ErelasApp({super.key});
@@ -18,6 +18,7 @@ class ErelasApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Erelas',
+        debugShowCheckedModeBanner: false,
         theme: ThemeData.dark(useMaterial3: true),
         home: const TodayPage(),
       );
@@ -64,33 +65,20 @@ class _TodayPageState extends State<TodayPage> {
   Widget build(BuildContext context) {
     final today = _today;
     return Scaffold(
-      body: Center(
-        child: today == null ? _placeholder() : _CloseView(index: today.index),
+      backgroundColor: barColor,
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: today == null ? _placeholder() : BarView(today: today),
       ),
     );
   }
 
-  Widget _placeholder() =>
-      Text(_error == null ? 'TAIEX …' : 'TAIEX —', style: const TextStyle(fontSize: 32));
-}
-
-class _CloseView extends StatelessWidget {
-  const _CloseView({required this.index});
-
-  final IndexQuote index;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = index.change >= 0 ? upColor : downColor;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('TAIEX ${formatPrice(index.close)}',
-            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w600)),
-        Text('${formatChange(index.change)}  ${formatMove(index.changePct)}',
-            style: TextStyle(fontSize: 20, color: color)),
-        Text('${index.date} · $sourceLabel'),
-      ],
-    );
-  }
+  Widget _placeholder() => Container(
+        height: barHeight,
+        color: barColor,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Text(_error == null ? 'TAIEX …' : 'TAIEX —',
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+      );
 }
