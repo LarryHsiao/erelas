@@ -19,7 +19,7 @@ void main() {
   final expanded = ValueNotifier(false);
   try {
     installTray(window, expanded);
-  } on StateError catch (error) {
+  } catch (error) {
     debugPrint('tray item unavailable, giving the bar its frame back: $error');
     restoreFrame(window);
   }

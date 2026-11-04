@@ -49,8 +49,13 @@ void resizeBar(Window window, {required bool expanded}) {
 
 /// Gives the window its frame back, and with it a close button. Used when the
 /// menu-bar or tray item could not be made: a frameless, always-on-top bar
-/// with no tray has no other way to be hidden or quit.
+/// with no tray has no other way to be hidden or quit. The content area keeps
+/// the bar's height, so the title bar grows the window instead of eating the bar.
 void restoreFrame(Window window) {
   window.setFrameless(false);
   window.isResizable = true;
+  if (Platform.isWindows) window.isVisibleInTaskbar = true;
+  final area = window.bounds.toRect();
+  window.contentBounds =
+      Rect.fromLTWH(area.left, area.top, area.width, barHeight).toNative();
 }
