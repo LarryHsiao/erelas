@@ -13,15 +13,17 @@ const String itemMarker = '◆';
 const Key crawlBeltKey = Key('crawl-belt');
 const Key crawlStaticKey = Key('crawl-static');
 
-TextSpan crawlSpan(List<Quote> items) => TextSpan(children: [
-      for (final item in items) ...[
-        TextSpan(text: '$itemMarker ${item.name} ${formatPrice(item.close)} '),
-        TextSpan(
-          text: '${formatMove(item.changePct)}   ',
-          style: TextStyle(color: item.change >= 0 ? upColor : downColor),
-        ),
-      ],
-    ]);
+TextSpan crawlSpan(List<Quote> items) => TextSpan(
+  children: [
+    for (final item in items) ...[
+      TextSpan(text: '$itemMarker ${item.name} ${formatPrice(item.close)} '),
+      TextSpan(
+        text: '${formatMove(item.changePct)}   ',
+        style: TextStyle(color: item.change >= 0 ? upColor : downColor),
+      ),
+    ],
+  ],
+);
 
 /// A TV-style strip: a fixed label chip and a looping belt of index moves.
 /// With reduced motion the belt stands still and ellipsises instead.
@@ -56,9 +58,8 @@ class _CrawlState extends State<Crawl> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  TextStyle get _style => DefaultTextStyle.of(context)
-      .style
-      .copyWith(fontSize: crawlFontSize);
+  TextStyle get _style =>
+      DefaultTextStyle.of(context).style.copyWith(fontSize: crawlFontSize);
 
   void _configure() {
     if (MediaQuery.disableAnimationsOf(context) || widget.items.isEmpty) {
@@ -83,25 +84,34 @@ class _CrawlState extends State<Crawl> with SingleTickerProviderStateMixin {
     return LayoutBuilder(
       builder: (_, box) => box.maxWidth < crawlMinWidth
           ? const SizedBox.shrink()
-          : Row(children: [
-              Container(
-                color: crawlChipColor,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                child: const Text(crawlLabel,
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: reduce ? _still() : _moving()),
-            ]),
+          : Row(
+              children: [
+                Container(
+                  color: crawlChipColor,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  child: const Text(
+                    crawlLabel,
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: reduce ? _still() : _moving()),
+              ],
+            ),
     );
   }
 
-  Widget _still() => Text.rich(crawlSpan(widget.items),
-      key: crawlStaticKey,
-      maxLines: 1,
-      softWrap: false,
-      overflow: TextOverflow.ellipsis,
-      style: _style);
+  Widget _still() => Text.rich(
+    crawlSpan(widget.items),
+    key: crawlStaticKey,
+    maxLines: 1,
+    softWrap: false,
+    overflow: TextOverflow.ellipsis,
+    style: _style,
+  );
 
   Widget _moving() {
     final belt = Row(
@@ -121,7 +131,9 @@ class _CrawlState extends State<Crawl> with SingleTickerProviderStateMixin {
           animation: _belt,
           child: belt,
           builder: (_, child) => Transform.translate(
-              offset: Offset(-_belt.value * _span, 0), child: child),
+            offset: Offset(-_belt.value * _span, 0),
+            child: child,
+          ),
         ),
       ),
     );

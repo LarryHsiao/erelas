@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 
 import 'today.dart';
 
-final Uri todayUrl = Uri.parse('https://larryhsiao.github.io/erelas/today.json');
+final Uri todayUrl = Uri.parse(
+  'https://larryhsiao.github.io/erelas/today.json',
+);
 const Duration fetchTimeout = Duration(seconds: 20);
 
 Future<Today> fetchToday(http.Client client, Uri url) async {

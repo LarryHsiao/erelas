@@ -28,10 +28,16 @@ Future<void> pumpPage(
 }
 
 Today withClose(double close) => Today(
-    index: IndexQuote(
-        date: '2026-11-04', name: 'x', close: close, change: 1, changePct: 1),
-    ticker: const [],
-    asOf: '2026-11-04T12:00:00+08:00');
+  index: IndexQuote(
+    date: '2026-11-04',
+    name: 'x',
+    close: close,
+    change: 1,
+    changePct: 1,
+  ),
+  ticker: const [],
+  asOf: '2026-11-04T12:00:00+08:00',
+);
 
 void main() {
   testWidgets('shows the close, change, date and source', (tester) async {

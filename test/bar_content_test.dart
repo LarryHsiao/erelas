@@ -20,7 +20,10 @@ void main() {
   });
 
   test('left, top and width are never moved', () {
-    final actual = barContent(const Rect.fromLTWH(7, 9, 800, 5), expanded: true);
+    final actual = barContent(
+      const Rect.fromLTWH(7, 9, 800, 5),
+      expanded: true,
+    );
     expect([actual.left, actual.top, actual.width], [7, 9, 800]);
   });
 }

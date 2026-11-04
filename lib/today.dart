@@ -10,11 +10,11 @@ class Quote {
   });
 
   factory Quote.fromJson(Map<String, dynamic> json) => Quote(
-        name: json['name'] as String,
-        close: (json['close'] as num).toDouble(),
-        change: (json['change'] as num).toDouble(),
-        changePct: (json['changePct'] as num).toDouble(),
-      );
+    name: json['name'] as String,
+    close: (json['close'] as num).toDouble(),
+    change: (json['change'] as num).toDouble(),
+    changePct: (json['changePct'] as num).toDouble(),
+  );
 
   final String name;
   final double close;

@@ -9,24 +9,34 @@ const items = [
   Quote(name: '水泥窯製類指數', close: 692.91, change: 7.23, changePct: 1.05),
 ];
 
-Future<void> pumpCrawl(WidgetTester tester,
-    {bool reduceMotion = false, double width = 400}) async {
-  await tester.pumpWidget(MaterialApp(
-    home: MediaQuery(
-      data: MediaQueryData(disableAnimations: reduceMotion),
-      child: Scaffold(
-        body: SizedBox(
-            width: width, height: barHeight, child: const Crawl(items: items)),
+Future<void> pumpCrawl(
+  WidgetTester tester, {
+  bool reduceMotion = false,
+  double width = 400,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(disableAnimations: reduceMotion),
+        child: Scaffold(
+          body: SizedBox(
+            width: width,
+            height: barHeight,
+            child: const Crawl(items: items),
+          ),
+        ),
       ),
     ),
-  ));
+  );
 }
 
 double beltLeft(WidgetTester tester) =>
     tester.getTopLeft(find.byKey(crawlBeltKey)).dx;
 
 void main() {
-  testWidgets('with less room than the chip needs it draws nothing', (tester) async {
+  testWidgets('with less room than the chip needs it draws nothing', (
+    tester,
+  ) async {
     await pumpCrawl(tester, width: crawlMinWidth - 1);
     expect(find.text(crawlLabel), findsNothing);
     expect(tester.takeException(), isNull);
@@ -39,10 +49,14 @@ void main() {
 
   testWidgets('shows every item with its close and move', (tester) async {
     await pumpCrawl(tester);
-    final text = tester.widgetList<RichText>(find.byType(RichText))
+    final text = tester
+        .widgetList<RichText>(find.byType(RichText))
         .map((w) => w.text.toPlainText())
         .join(' ');
-    for (final expected in ['半導體類指數 1,446.44 ▼3.03%', '水泥窯製類指數 692.91 ▲1.05%']) {
+    for (final expected in [
+      '半導體類指數 1,446.44 ▼3.03%',
+      '水泥窯製類指數 692.91 ▲1.05%',
+    ]) {
       expect(text, contains(expected));
     }
   });
@@ -54,8 +68,9 @@ void main() {
     expect(beltLeft(tester), lessThan(before));
   });
 
-  testWidgets('the belt wraps back to the start, so it loops with no gap',
-      (tester) async {
+  testWidgets('the belt wraps back to the start, so it loops with no gap', (
+    tester,
+  ) async {
     await pumpCrawl(tester);
     var previous = beltLeft(tester);
     var wrapped = false;
@@ -68,8 +83,9 @@ void main() {
     expect(wrapped, isTrue);
   });
 
-  testWidgets('with reduced motion nothing moves and text ellipsises',
-      (tester) async {
+  testWidgets('with reduced motion nothing moves and text ellipsises', (
+    tester,
+  ) async {
     await pumpCrawl(tester, reduceMotion: true);
     expect(find.byKey(crawlBeltKey), findsNothing);
     final text = tester.widget<Text>(find.byKey(crawlStaticKey));
@@ -84,22 +100,35 @@ void main() {
   });
 
   testWidgets('with no items the controller does not run', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(body: SizedBox(width: 400, height: barHeight, child: Crawl(items: []))),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: barHeight,
+            child: Crawl(items: []),
+          ),
+        ),
+      ),
+    );
     expect(tester.binding.transientCallbackCount, 0);
   });
 
-  testWidgets('turning reduced motion on at runtime stops the belt',
-      (tester) async {
+  testWidgets('turning reduced motion on at runtime stops the belt', (
+    tester,
+  ) async {
     Widget app(bool reduce) => MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(disableAnimations: reduce),
-            child: const Scaffold(
-              body: SizedBox(width: 400, height: barHeight, child: Crawl(items: items)),
-            ),
+      home: MediaQuery(
+        data: MediaQueryData(disableAnimations: reduce),
+        child: const Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: barHeight,
+            child: Crawl(items: items),
           ),
-        );
+        ),
+      ),
+    );
     await tester.pumpWidget(app(false));
     expect(find.byKey(crawlBeltKey), findsOneWidget);
     await tester.pumpWidget(app(true));
@@ -108,16 +137,21 @@ void main() {
     expect(tester.binding.transientCallbackCount, 0);
   });
 
-  testWidgets('turning reduced motion off at runtime restarts the belt',
-      (tester) async {
+  testWidgets('turning reduced motion off at runtime restarts the belt', (
+    tester,
+  ) async {
     Widget app(bool reduce) => MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(disableAnimations: reduce),
-            child: const Scaffold(
-              body: SizedBox(width: 400, height: barHeight, child: Crawl(items: items)),
-            ),
+      home: MediaQuery(
+        data: MediaQueryData(disableAnimations: reduce),
+        child: const Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: barHeight,
+            child: Crawl(items: items),
           ),
-        );
+        ),
+      ),
+    );
     await tester.pumpWidget(app(true));
     await tester.pumpWidget(app(false));
     final before = beltLeft(tester);

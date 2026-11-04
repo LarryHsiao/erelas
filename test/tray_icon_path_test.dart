@@ -4,14 +4,26 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('the icon sits in the flutter assets beside the executable', () {
     const sep = '/';
-    final expected = ['C:/apps/erelas', 'data', 'flutter_assets', 'assets', 'tray_icon.png'].join(sep);
+    final expected = [
+      'C:/apps/erelas',
+      'data',
+      'flutter_assets',
+      'assets',
+      'tray_icon.png',
+    ].join(sep);
     final actual = trayIconPath('C:/apps/erelas/erelas.exe', separator: sep);
     expect(actual, expected);
   });
 
   test('a backslash separator is used as given', () {
     const sep = r'\';
-    final expected = [r'C:\apps\erelas', 'data', 'flutter_assets', 'assets', 'tray_icon.png'].join(sep);
+    final expected = [
+      r'C:\apps\erelas',
+      'data',
+      'flutter_assets',
+      'assets',
+      'tray_icon.png',
+    ].join(sep);
     final actual = trayIconPath(r'C:\apps\erelas\erelas.exe', separator: sep);
     expect(actual, expected);
   });

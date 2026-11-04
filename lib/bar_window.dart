@@ -58,6 +58,10 @@ void restoreFrame(Window window) {
   window.isResizable = true;
   if (Platform.isWindows) window.isVisibleInTaskbar = true;
   final area = window.bounds.toRect();
-  window.contentBounds =
-      Rect.fromLTWH(area.left, area.top, area.width, barHeight).toNative();
+  window.contentBounds = Rect.fromLTWH(
+    area.left,
+    area.top,
+    area.width,
+    barHeight,
+  ).toNative();
 }

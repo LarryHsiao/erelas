@@ -67,11 +67,13 @@ void main() {
 
   group('fetchToday', () {
     test('returns the parsed payload on 200', () async {
-      final client = MockClient((_) async => http.Response.bytes(
-            utf8.encode(fixture),
-            200,
-            headers: {'content-type': 'application/json'},
-          ));
+      final client = MockClient(
+        (_) async => http.Response.bytes(
+          utf8.encode(fixture),
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
       final today = await fetchToday(client, Uri.parse('https://x/today.json'));
       expect(today.index.close, 43307.54);
     });
