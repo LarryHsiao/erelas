@@ -15,7 +15,8 @@ Future<Today> loadFailure() async => throw Exception('offline');
 
 Future<void> pumpPage(WidgetTester tester, Future<Today> Function() load) async {
   await tester.pumpWidget(MaterialApp(home: TodayPage(load: load)));
-  await tester.pumpAndSettle();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
 }
 
 void main() {

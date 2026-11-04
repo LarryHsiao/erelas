@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'crawl.dart';
 import 'format.dart';
 import 'today.dart';
 
@@ -30,15 +31,14 @@ class BarView extends StatelessWidget {
           const SizedBox(width: 10),
           Text('${formatChange(index.change)}  ${formatMove(index.changePct)}',
               style: TextStyle(color: color)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text('${index.date} · $sourceLabel',
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: Colors.white60)),
-          ),
+          const SizedBox(width: 14),
+          if (today.ticker.isEmpty)
+            const Spacer()
+          else
+            Expanded(child: Crawl(items: today.ticker)),
+          const SizedBox(width: 14),
+          Text('${index.date} · $sourceLabel',
+              style: const TextStyle(fontSize: 11, color: Colors.white60)),
         ],
       ),
     );
