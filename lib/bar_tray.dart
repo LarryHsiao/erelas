@@ -94,6 +94,12 @@ void installTray(Window window, ValueNotifier<bool> expanded) {
     ..setTooltip(trayTooltip)
     ..setContextMenu(h.menu)
     ..setContextMenuTrigger(ContextMenuTrigger.clicked);
+  // Windows registers the icon with the taskbar only here; macOS status items
+  // are visible by default, so the call is a no-op there.
+  h.tray.setVisible(true);
+  // Windows watches the icon for clicks only once something listens to it;
+  // without a listener the context menu trigger above never fires.
+  h.tray.addListener((_) {});
   _alive.addAll([h.tray, h.menu, h.toggle, h.divider, h.quit]);
 }
 
@@ -105,8 +111,6 @@ void _showMark(TrayIcon tray) {
   }
   final icon = Image.fromFile(trayIconPath(Platform.resolvedExecutable));
   if (icon == null) throw StateError('the tray icon image could not be loaded');
-  tray
-    ..icon = icon
-    ..isIconTemplate = true;
+  tray.icon = icon; // a coloured image: a template would mask it to a square
   _alive.add(icon);
 }
