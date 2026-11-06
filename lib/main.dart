@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart'
+    show SharedPreferencesAsync;
 import 'package:window_manager/window_manager.dart'
     show Window, WindowBlurredEvent, WindowMovedEvent;
 
+import 'bar_edge_store.dart';
 import 'bar_tray.dart';
 import 'bar_view.dart';
 import 'bar_window.dart';
@@ -14,16 +17,20 @@ import 'today.dart';
 
 const Duration refreshInterval = Duration(minutes: 15);
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final window = configureBarWindow();
+  final store = BarEdgeStore(SharedPreferencesAsync());
+  final edge = ValueNotifier(await store.load());
+  final window = configureBarWindow(edge.value);
   final expanded = ValueNotifier(false);
-  final edge = ValueNotifier(BarEdge.top);
   final docked = _tryInstallTray(window, expanded, edge);
   expanded.addListener(
     () => resizeBar(window, expanded: expanded.value, edge: edge.value),
   );
-  edge.addListener(() => moveBar(window, edge.value, expanded: expanded.value));
+  edge.addListener(() {
+    moveBar(window, edge.value, expanded: expanded.value);
+    store.save(edge.value);
+  });
   window.addListener((event) {
     if (event is WindowBlurredEvent) expanded.value = false;
     // After launch macOS moves the window off the top edge it was given; put

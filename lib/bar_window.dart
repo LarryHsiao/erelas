@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/painting.dart';
 import 'package:nativeapi/nativeapi.dart' show DisplayManager;
 import 'package:window_manager/window_manager.dart';
@@ -23,9 +24,9 @@ Rect barFrame(Rect area, BarEdge edge, {required bool expanded}) {
   return Rect.fromLTWH(area.left, top, area.width, height);
 }
 
-/// Turns the app window into a borderless, always-on-top bar docked to the
-/// top of the primary display's work area, on every Space.
-Window configureBarWindow() {
+/// Turns the app window into a borderless, always-on-top bar docked to [edge]
+/// of the primary display's work area, on every Space.
+Window configureBarWindow(BarEdge edge) {
   final window = WindowManager.instance.getCurrent();
   final display = DisplayManager.instance.getPrimary();
   if (window == null || display == null) {
@@ -41,7 +42,7 @@ Window configureBarWindow() {
   window.isResizable = false;
   window.bounds = barFrame(
     display.workArea.toRect(),
-    BarEdge.top,
+    edge,
     expanded: false,
   ).toNative();
   window.show();
@@ -64,7 +65,10 @@ bool isDocked(Rect actual, Rect wanted) =>
 /// moves.
 void moveBar(Window window, BarEdge edge, {required bool expanded}) {
   final display = DisplayManager.instance.getPrimary();
-  if (display == null) throw StateError('no display to dock the bar to');
+  if (display == null) {
+    debugPrint('no display to dock the bar to, leaving it where it is');
+    return;
+  }
   final wanted = barFrame(display.workArea.toRect(), edge, expanded: expanded);
   if (isDocked(window.bounds.toRect(), wanted)) return;
   window.bounds = wanted.toNative();
