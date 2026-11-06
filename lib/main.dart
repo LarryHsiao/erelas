@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -14,6 +15,7 @@ import 'bar_window.dart';
 import 'detail_panel.dart';
 import 'fetch_today.dart';
 import 'today.dart';
+import 'update_check.dart';
 
 const Duration refreshInterval = Duration(minutes: 15);
 
@@ -23,7 +25,8 @@ Future<void> main() async {
   final edge = ValueNotifier(await store.load());
   final window = configureBarWindow(edge.value);
   final expanded = ValueNotifier(false);
-  final docked = _tryInstallTray(window, expanded, edge);
+  final updates = Platform.isMacOS ? const UpdateCheck(SparkleSource()) : null;
+  final docked = _tryInstallTray(window, expanded, edge, updates);
   expanded.addListener(
     () => resizeBar(window, expanded: expanded.value, edge: edge.value),
   );
@@ -40,6 +43,7 @@ Future<void> main() async {
     }
   });
   runApp(ErelasApp(expanded: expanded, edge: edge));
+  if (updates != null) unawaited(updates.start());
 }
 
 /// Whether the tray stands. Without it the bar gets its frame back, so it has
@@ -48,9 +52,10 @@ bool _tryInstallTray(
   Window window,
   ValueNotifier<bool> expanded,
   ValueNotifier<BarEdge> edge,
+  UpdateCheck? updates,
 ) {
   try {
-    installTray(window, expanded, edge);
+    installTray(window, expanded, edge, updates: updates);
     return true;
   } catch (error) {
     debugPrint('tray item unavailable, giving the bar its frame back: $error');
