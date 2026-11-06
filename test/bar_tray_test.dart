@@ -1,4 +1,5 @@
 import 'package:erelas/bar_tray.dart';
+import 'package:erelas/bar_window.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -8,5 +9,13 @@ void main() {
 
   test('a hidden bar offers to show itself', () {
     expect(toggleLabel(false), 'Show bar');
+  });
+
+  test('a top bar offers to move to the bottom', () {
+    expect(moveLabel(BarEdge.top), 'Move to bottom');
+  });
+
+  test('a bottom bar offers to move to the top', () {
+    expect(moveLabel(BarEdge.bottom), 'Move to top');
   });
 }
