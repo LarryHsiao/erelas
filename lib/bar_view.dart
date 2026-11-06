@@ -8,8 +8,8 @@ const double barHeight = 36;
 const Color barColor = Color(0xFF1B1B1F);
 
 /// Taiwan convention: red is up, green is down. Open question with the owner.
-const Color upColor = Color(0xFFC0392B);
-const Color downColor = Color(0xFF2F7D3A);
+const Color upColor = Color(0xFFEF5350);
+const Color downColor = Color(0xFF4CAF50);
 const String sourceLabel = 'Source: TWSE';
 const String indexLabel = 'TAIEX';
 const double barPadding = 12;
