@@ -53,7 +53,7 @@ typedef _Handles = ({
   MenuItem quit,
 });
 
-_Handles _createHandles() {
+_Handles _createHandles(BarEdge edge) {
   final tray = TrayIcon.create();
   final menu = Menu.create();
   final toggle = MenuItem.createWithLabelAndType(
@@ -61,7 +61,7 @@ _Handles _createHandles() {
     MenuItemType.normal,
   );
   final move = MenuItem.createWithLabelAndType(
-    moveLabel(BarEdge.top),
+    moveLabel(edge),
     MenuItemType.normal,
   );
   final divider = MenuItem.createWithLabelAndType('', MenuItemType.separator);
@@ -117,7 +117,7 @@ void installTray(
   ValueNotifier<bool> expanded,
   ValueNotifier<BarEdge> edge,
 ) {
-  final h = _createHandles();
+  final h = _createHandles(edge.value);
   _listen(h, window, expanded, edge);
   for (final item in [h.toggle, h.move, h.divider, h.quit]) {
     h.menu.addItem(item);
