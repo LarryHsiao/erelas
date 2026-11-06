@@ -107,4 +107,13 @@ expected=""
 actual="$(cd "$SANDBOX/clone" && git status --porcelain)"
 expect_equal "a failed rebase is aborted, leaving the tree clean" "$expected" "$actual"
 
+# The temporary directory outlives main() and is removed when the script ends,
+# without the exit trap tripping over a variable that went out of scope.
+child='source "$1"; run() { make_workdir; echo "$WORKDIR"; }; run'
+errors="$SANDBOX/trap-errors"
+dir="$(bash -c "$child" _ "$HERE/publish_feed_macos.sh" 2>"$errors")"
+expected="gone,silent"
+actual="$([ -d "$dir" ] && echo present || echo gone),$([ -s "$errors" ] && echo noisy || echo silent)"
+expect_equal "the workdir is removed at exit and the trap is silent" "$expected" "$actual"
+
 exit "$FAILED"

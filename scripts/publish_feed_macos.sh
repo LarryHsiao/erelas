@@ -101,6 +101,13 @@ sign_public_dmg() { # tag workdir
   $DART run auto_updater:sign_update "$2/$APP_NAME.dmg" | sign_fields
 }
 
+# A temporary directory, removed when the script exits. WORKDIR is global on
+# purpose: the trap runs after main() has returned, when a `local` would be gone.
+make_workdir() {
+  WORKDIR=$(mktemp -d)
+  trap 'rm -rf "$WORKDIR"' EXIT
+}
+
 add_feed_item() { # tag version build signature length
   python3 -I "$HERE/update_appcast.py" --appcast "$FEED" \
     --version "$2" --build "$3" \
@@ -111,7 +118,7 @@ add_feed_item() { # tag version build signature length
 
 main() {
   cd "$(git rev-parse --show-toplevel)"
-  local tag="${1:-v$(read_version)}" version build workdir signature length
+  local tag="${1:-v$(read_version)}" version build signature length
   require_clean_tree
   require_branch "$RELEASE_BRANCH"
   require_pushed "$RELEASE_BRANCH"
@@ -120,9 +127,8 @@ main() {
   version=$(git show "$tag:pubspec.yaml" | version_from)
   build=$(git show "$tag:pubspec.yaml" | build_number_from)
   [ "v$version" = "$tag" ] || fail "tag $tag holds pubspec version $version"
-  workdir=$(mktemp -d)
-  trap 'rm -rf "$workdir"' EXIT
-  read -r signature length < <(sign_public_dmg "$tag" "$workdir")
+  make_workdir
+  read -r signature length < <(sign_public_dmg "$tag" "$WORKDIR")
   [ -n "$signature" ] && [ -n "$length" ] || fail "release $tag was not signed"
   add_feed_item "$tag" "$version" "$build" "$signature" "$length"
   git add "$FEED"
