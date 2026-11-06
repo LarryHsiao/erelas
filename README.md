@@ -21,3 +21,32 @@ Source of the numbers: TWSE OpenAPI (open government data). Every client shows
 python3 -I -m unittest discover -s writer   # writer tests
 fvm flutter test                            # client tests (Flutter 3.47.9, see .fvmrc)
 ```
+
+## Releasing the macOS app
+
+`scripts/publish_macos.sh` builds, signs, notarizes and staples
+`build/publish/erelas.dmg`; with `--publish` it also uploads it to a **draft**
+GitHub release `v<VERSION>` (the version in `pubspec.yaml`), tagged at the
+built commit. macOS only. There is no in-app update check yet.
+
+One-time setup, on the releasing Mac:
+
+```
+security find-identity -v -p codesigning          # note the Developer ID Application hash
+xcrun notarytool store-credentials erelas-notary --apple-id <Apple ID> --team-id 2SX9WGZ5F8
+```
+
+(`store-credentials` asks for an app-specific password from account.apple.com.)
+
+Each release, from a clean, pushed `main` with the version bumped:
+
+```
+IDENTITY=<hash> scripts/publish_macos.sh --publish
+gh release edit v<VERSION> --draft=false          # after looking at the draft
+```
+
+The script refuses to run without `IDENTITY` or a working notary profile, on a
+dirty tree, off `main`, with unpushed commits, or when `analyze` or the tests
+fail. With `--publish` it also refuses when `gh` is not logged in, when the tag
+already names another commit, or when the release exists and is not a draft at
+the built commit. Its preflight checks are tested with `bash scripts/test_publish_macos.sh`.
