@@ -13,12 +13,17 @@ import 'package:nativeapi/nativeapi.dart'
         TrayIcon;
 import 'package:window_manager/window_manager.dart' show Window;
 
+import 'bar_window.dart' show BarEdge;
+
 const String trayTitle = '◆';
 const String trayTooltip = 'Erelas';
 const String quitLabel = 'Quit Erelas';
 const String trayIconFile = 'tray_icon.png';
 
 String toggleLabel(bool barVisible) => barVisible ? 'Hide bar' : 'Show bar';
+
+String moveLabel(BarEdge edge) =>
+    edge == BarEdge.top ? 'Move to bottom' : 'Move to top';
 
 /// Where the tray icon lies beside a built app: the executable's directory,
 /// then `data/flutter_assets/assets/tray_icon.png`. Windows draws no title in
@@ -43,6 +48,7 @@ typedef _Handles = ({
   TrayIcon tray,
   Menu menu,
   MenuItem toggle,
+  MenuItem move,
   MenuItem divider,
   MenuItem quit,
 });
@@ -54,19 +60,36 @@ _Handles _createHandles() {
     toggleLabel(true),
     MenuItemType.normal,
   );
+  final move = MenuItem.createWithLabelAndType(
+    moveLabel(BarEdge.top),
+    MenuItemType.normal,
+  );
   final divider = MenuItem.createWithLabelAndType('', MenuItemType.separator);
   final quit = MenuItem.createWithLabelAndType(quitLabel, MenuItemType.normal);
   if (tray == null ||
       menu == null ||
       toggle == null ||
+      move == null ||
       divider == null ||
       quit == null) {
     throw StateError('the native tray or menu could not be created');
   }
-  return (tray: tray, menu: menu, toggle: toggle, divider: divider, quit: quit);
+  return (
+    tray: tray,
+    menu: menu,
+    toggle: toggle,
+    move: move,
+    divider: divider,
+    quit: quit,
+  );
 }
 
-void _listen(_Handles h, Window window, ValueNotifier<bool> expanded) {
+void _listen(
+  _Handles h,
+  Window window,
+  ValueNotifier<bool> expanded,
+  ValueNotifier<BarEdge> edge,
+) {
   h.toggle.addListener((event) {
     if (event is! MenuItemClickedEvent) return;
     if (window.isVisible) {
@@ -77,16 +100,26 @@ void _listen(_Handles h, Window window, ValueNotifier<bool> expanded) {
     }
     h.toggle.label = toggleLabel(window.isVisible);
   });
+  h.move.addListener((event) {
+    if (event is! MenuItemClickedEvent) return;
+    edge.value = edge.value.other;
+    h.move.label = moveLabel(edge.value);
+  });
   h.quit.addListener((event) {
     if (event is MenuItemClickedEvent) Application.instance.quit(0);
   });
 }
 
-/// A menu-bar item whose menu hides or shows the bar, and quits the app.
-void installTray(Window window, ValueNotifier<bool> expanded) {
+/// A menu-bar item whose menu hides or shows the bar, moves it to the other
+/// edge, and quits the app.
+void installTray(
+  Window window,
+  ValueNotifier<bool> expanded,
+  ValueNotifier<BarEdge> edge,
+) {
   final h = _createHandles();
-  _listen(h, window, expanded);
-  for (final item in [h.toggle, h.divider, h.quit]) {
+  _listen(h, window, expanded, edge);
+  for (final item in [h.toggle, h.move, h.divider, h.quit]) {
     h.menu.addItem(item);
   }
   _showMark(h.tray);
@@ -100,7 +133,7 @@ void installTray(Window window, ValueNotifier<bool> expanded) {
   // Windows watches the icon for clicks only once something listens to it;
   // without a listener the context menu trigger above never fires.
   h.tray.addListener((_) {});
-  _alive.addAll([h.tray, h.menu, h.toggle, h.divider, h.quit]);
+  _alive.addAll([h.tray, h.menu, h.toggle, h.move, h.divider, h.quit]);
 }
 
 /// macOS draws a text title in the menu bar; Windows draws only an icon.

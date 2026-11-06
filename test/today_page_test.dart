@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:erelas/bar_view.dart';
+import 'package:erelas/bar_window.dart';
 import 'package:erelas/main.dart';
 import 'package:erelas/today.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +21,11 @@ Future<void> pumpPage(
 ) async {
   await tester.pumpWidget(
     MaterialApp(
-      home: TodayPage(load: load, expanded: ValueNotifier(false)),
+      home: TodayPage(
+        load: load,
+        expanded: ValueNotifier(false),
+        edge: ValueNotifier(BarEdge.top),
+      ),
     ),
   );
   await tester.pump();
