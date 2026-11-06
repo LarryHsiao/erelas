@@ -39,4 +39,20 @@ void main() {
     expect(BarEdge.top.other, BarEdge.bottom);
     expect(BarEdge.bottom.other, BarEdge.top);
   });
+
+  test('a window on its frame counts as docked', () {
+    final wanted = barFrame(area, BarEdge.top, expanded: false);
+    expect(isDocked(wanted, wanted), isTrue);
+  });
+
+  test('a window a fraction of a pixel off still counts as docked', () {
+    final wanted = barFrame(area, BarEdge.top, expanded: false);
+    expect(isDocked(wanted.shift(const Offset(0, 0.4)), wanted), isTrue);
+  });
+
+  test('a top-docked bar found at the bottom is not docked', () {
+    final wanted = barFrame(area, BarEdge.top, expanded: false);
+    final found = barFrame(area, BarEdge.bottom, expanded: false);
+    expect(isDocked(found, wanted), isFalse);
+  });
 }

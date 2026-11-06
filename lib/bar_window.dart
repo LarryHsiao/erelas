@@ -48,17 +48,26 @@ Window configureBarWindow() {
   return window;
 }
 
-/// Docks the bar to [edge] of the primary display's work area. It sets the
-/// outer bounds, which equal the content area only while the window is
-/// frameless; the framed fallback has no tray, so it never moves.
+/// How far a window may sit from its frame and still count as docked.
+const double dockTolerance = 1;
+
+/// Whether [actual] is where the bar belongs, give or take [dockTolerance].
+bool isDocked(Rect actual, Rect wanted) =>
+    (actual.left - wanted.left).abs() < dockTolerance &&
+    (actual.top - wanted.top).abs() < dockTolerance &&
+    (actual.right - wanted.right).abs() < dockTolerance &&
+    (actual.bottom - wanted.bottom).abs() < dockTolerance;
+
+/// Docks the bar to [edge] of the primary display's work area, unless it is
+/// already there. It sets the outer bounds, which equal the content area only
+/// while the window is frameless; the framed fallback has no tray, so it never
+/// moves.
 void moveBar(Window window, BarEdge edge, {required bool expanded}) {
   final display = DisplayManager.instance.getPrimary();
   if (display == null) throw StateError('no display to dock the bar to');
-  window.bounds = barFrame(
-    display.workArea.toRect(),
-    edge,
-    expanded: expanded,
-  ).toNative();
+  final wanted = barFrame(display.workArea.toRect(), edge, expanded: expanded);
+  if (isDocked(window.bounds.toRect(), wanted)) return;
+  window.bounds = wanted.toNative();
 }
 
 /// The content area for the bar, closed or holding the detail drawer. Left

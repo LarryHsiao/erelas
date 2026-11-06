@@ -2,7 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:window_manager/window_manager.dart' show WindowBlurredEvent;
+import 'package:window_manager/window_manager.dart'
+    show Window, WindowBlurredEvent, WindowMovedEvent;
 
 import 'bar_tray.dart';
 import 'bar_view.dart';
@@ -18,20 +19,37 @@ void main() {
   final window = configureBarWindow();
   final expanded = ValueNotifier(false);
   final edge = ValueNotifier(BarEdge.top);
-  try {
-    installTray(window, expanded, edge);
-  } catch (error) {
-    debugPrint('tray item unavailable, giving the bar its frame back: $error');
-    restoreFrame(window);
-  }
+  final docked = _tryInstallTray(window, expanded, edge);
   expanded.addListener(
     () => resizeBar(window, expanded: expanded.value, edge: edge.value),
   );
   edge.addListener(() => moveBar(window, edge.value, expanded: expanded.value));
   window.addListener((event) {
     if (event is WindowBlurredEvent) expanded.value = false;
+    // After launch macOS moves the window off the top edge it was given; put
+    // it back wherever it was meant to be. Only a frameless bar can be docked.
+    if (event is WindowMovedEvent && docked) {
+      moveBar(window, edge.value, expanded: expanded.value);
+    }
   });
   runApp(ErelasApp(expanded: expanded, edge: edge));
+}
+
+/// Whether the tray stands. Without it the bar gets its frame back, so it has
+/// a close button and is no longer docked.
+bool _tryInstallTray(
+  Window window,
+  ValueNotifier<bool> expanded,
+  ValueNotifier<BarEdge> edge,
+) {
+  try {
+    installTray(window, expanded, edge);
+    return true;
+  } catch (error) {
+    debugPrint('tray item unavailable, giving the bar its frame back: $error');
+    restoreFrame(window);
+    return false;
+  }
 }
 
 class ErelasApp extends StatelessWidget {
