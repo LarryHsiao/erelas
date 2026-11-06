@@ -14,10 +14,12 @@ import 'package:nativeapi/nativeapi.dart'
 import 'package:window_manager/window_manager.dart' show Window;
 
 import 'bar_window.dart' show BarEdge;
+import 'update_check.dart' show UpdateCheck;
 
 const String trayTitle = '◆';
 const String trayTooltip = 'Erelas';
 const String quitLabel = 'Quit Erelas';
+const String checkUpdatesLabel = 'Check for Updates…';
 const String trayIconFile = 'tray_icon.png';
 
 String toggleLabel(bool barVisible) => barVisible ? 'Hide bar' : 'Show bar';
@@ -49,6 +51,7 @@ typedef _Handles = ({
   Menu menu,
   MenuItem toggle,
   MenuItem move,
+  MenuItem check,
   MenuItem divider,
   MenuItem quit,
 });
@@ -64,12 +67,17 @@ _Handles _createHandles(BarEdge edge) {
     moveLabel(edge),
     MenuItemType.normal,
   );
+  final check = MenuItem.createWithLabelAndType(
+    checkUpdatesLabel,
+    MenuItemType.normal,
+  );
   final divider = MenuItem.createWithLabelAndType('', MenuItemType.separator);
   final quit = MenuItem.createWithLabelAndType(quitLabel, MenuItemType.normal);
   if (tray == null ||
       menu == null ||
       toggle == null ||
       move == null ||
+      check == null ||
       divider == null ||
       quit == null) {
     throw StateError('the native tray or menu could not be created');
@@ -79,6 +87,7 @@ _Handles _createHandles(BarEdge edge) {
     menu: menu,
     toggle: toggle,
     move: move,
+    check: check,
     divider: divider,
     quit: quit,
   );
@@ -89,8 +98,24 @@ void _listen(
   Window window,
   ValueNotifier<bool> expanded,
   ValueNotifier<BarEdge> edge,
+  UpdateCheck? updates,
 ) {
-  h.toggle.addListener((event) {
+  _listenToggle(h.toggle, window, expanded);
+  _listenMove(h.move, edge);
+  h.check.addListener((event) {
+    if (event is MenuItemClickedEvent) updates?.checkNow();
+  });
+  h.quit.addListener((event) {
+    if (event is MenuItemClickedEvent) Application.instance.quit(0);
+  });
+}
+
+void _listenToggle(
+  MenuItem toggle,
+  Window window,
+  ValueNotifier<bool> expanded,
+) {
+  toggle.addListener((event) {
     if (event is! MenuItemClickedEvent) return;
     if (window.isVisible) {
       expanded.value = false; // never leave the drawer open behind a hidden bar
@@ -98,28 +123,30 @@ void _listen(
     } else {
       window.show();
     }
-    h.toggle.label = toggleLabel(window.isVisible);
+    toggle.label = toggleLabel(window.isVisible);
   });
-  h.move.addListener((event) {
+}
+
+void _listenMove(MenuItem move, ValueNotifier<BarEdge> edge) {
+  move.addListener((event) {
     if (event is! MenuItemClickedEvent) return;
     edge.value = edge.value.other;
-    h.move.label = moveLabel(edge.value);
-  });
-  h.quit.addListener((event) {
-    if (event is MenuItemClickedEvent) Application.instance.quit(0);
+    move.label = moveLabel(edge.value);
   });
 }
 
 /// A menu-bar item whose menu hides or shows the bar, moves it to the other
-/// edge, and quits the app.
+/// edge, checks for updates when [updates] is given, and quits the app.
 void installTray(
   Window window,
   ValueNotifier<bool> expanded,
-  ValueNotifier<BarEdge> edge,
-) {
+  ValueNotifier<BarEdge> edge, {
+  UpdateCheck? updates,
+}) {
   final h = _createHandles(edge.value);
-  _listen(h, window, expanded, edge);
-  for (final item in [h.toggle, h.move, h.divider, h.quit]) {
+  _listen(h, window, expanded, edge, updates);
+  final items = [h.toggle, h.move, if (updates != null) h.check];
+  for (final item in [...items, h.divider, h.quit]) {
     h.menu.addItem(item);
   }
   _showMark(h.tray);
@@ -133,7 +160,7 @@ void installTray(
   // Windows watches the icon for clicks only once something listens to it;
   // without a listener the context menu trigger above never fires.
   h.tray.addListener((_) {});
-  _alive.addAll([h.tray, h.menu, h.toggle, h.move, h.divider, h.quit]);
+  _alive.addAll([h.tray, h.menu, h.toggle, h.move, h.check, h.divider, h.quit]);
 }
 
 /// macOS draws a text title in the menu bar; Windows draws only an icon.

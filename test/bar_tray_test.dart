@@ -18,4 +18,8 @@ void main() {
   test('a bottom bar offers to move to the top', () {
     expect(moveLabel(BarEdge.bottom), 'Move to top');
   });
+
+  test('the update item names what it does', () {
+    expect(checkUpdatesLabel, 'Check for Updates…');
+  });
 }
