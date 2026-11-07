@@ -8,3 +8,7 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
+
+# WinSparkle private signing key and the code-signing certificate - never commit
+dsa_priv.pem
+*.pfx

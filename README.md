@@ -57,6 +57,32 @@ feed script refuses a draft release or a build lower than the feed's latest.
 Version 1.0.0 contains no updater, so those copies must be replaced by hand
 once, with the first release that includes Sparkle.
 
+### Windows
+
+```
+powershell -File scripts\publish_windows.ps1 -Publish   # builds, signs, uploads to the same draft release
+gh release edit v<VERSION> --draft=false          # after looking at the draft
+powershell -File scripts\publish_feed_windows.ps1 # then offer it to installed copies
+```
+
+The signing certificate comes from `WINDOWS_CODESIGN_PFX_BASE64` and `CERT_PASSWORD` when
+those are set, otherwise from the Vaultwarden item `erelas-windows-codesign` (password field =
+base64 of the `.pfx`, notes field = its password). `publish_windows.ps1` needs Flutter (via `fvm`), Inno Setup 6 and `signtool`,
+and the same clean, pushed `main` as the macOS script; without `-Publish` it
+only builds `build\publish\erelas-setup-<VERSION>.exe`. The feed step adds a
+`sparkle:os="windows"` item to the same `docs/appcast.xml`, leaving the macOS
+item alone. WinSparkle compares the item's `sparkle:version` with the exe's
+ProductVersion, which Flutter writes as `<version>+<build>` (`1.1.1+3`), so the
+item carries that exact string and the build number must still rise every
+release. Both steps read their secrets through `bash` (and so need `bw serve` running and unlocked, unless
+the two variables are set by hand), so Git Bash must come before any WSL `bash.exe` on `PATH`. The installer is signed with the DSA key in Vaultwarden (item
+`orthanc-winsparkle-dsa`, the one Orthanc uses); its public half is
+`dsa_pub.pem`, compiled into the exe by `windows/runner/Runner.rc`. The private
+half is read only while signing and is gitignored. Tested with
+`powershell -File scripts\test_publish_windows.ps1`. The update flow itself
+(download, verify, swap) is WinSparkle's and has not yet been walked on a
+Windows machine; the first Windows release is the occasion to do so.
+
 The script refuses to run without `IDENTITY` or a working notary profile, on a
 dirty tree, off `main`, with unpushed commits, or when `analyze` or the tests
 fail. With `--publish` it also refuses when `gh` is not logged in, when the tag
