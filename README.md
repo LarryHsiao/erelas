@@ -119,7 +119,12 @@ powershell -File scripts\test_publish_windows.ps1               # Windows script
 python3 -I -m unittest discover -s scripts                      # feed writer and release job
 ```
 
+The scripts' tests also run in CI (`script-tests`) on every change under
+`scripts/` or `installer/`: the Python tests on Linux, macOS and Windows, the
+macOS script checks on Linux and on macOS's own bash 3.2, and the Windows checks
+in Windows PowerShell 5.1.
+
 The update flow itself (download, verify, swap) belongs to Sparkle and
-WinSparkle and is not run by these tests. The macOS signing and the Windows
-download-and-swap have not yet been walked on real machines; the first release
-through the pipeline is the occasion to do so.
+WinSparkle and is not run by these tests. Release 1.1.2 ran the macOS signing
+and both builds through the pipeline for real; an installed copy updating on
+either platform has not yet been walked.

@@ -94,16 +94,20 @@ them as queued, and they resolve to the earlier successful builds. Note that
 TeamCity's build list shows only the default branch unless the locator carries
 `branch:default:any`, so a tag build is invisible without it.
 
-## Before the first release through it
+## What the first release showed
 
-- Walk one update on each platform by hand: install the previous version, let
-  it find the new one, confirm it installs. The tests cover the scripts, not
-  Sparkle's or WinSparkle's download-and-swap.
-- Only the pure parts of the macOS headless signing are unit-tested: the check
-  that every variable is set, and the choice of `notarytool` arguments. The
-  keychain, `codesign`, `notarytool` and Sparkle-signing steps have never been
-  run, and `ensure_draft` has been tested against a stand-in for `gh`, not the
-  real one. The first tag is their first real run, so make it a release you can
-  afford to redo, such as 1.1.2.
-- The tag must be on a commit that already contains these scripts, so merge
-  them to `main` before tagging.
+Release 1.1.2 was the first through the pipeline, and it ran for real the parts
+that had only been tested against stand-ins: both builds succeeded on the real
+agents (the headless keychain, `codesign`, `notarytool` and Sparkle signing on
+the Mac, the signing on Windows, and the draft logic against the real `gh`), and
+the publish job found one real flaw, the feed push credential described above,
+now fixed.
+
+Still unproven: that an installed 1.1.1 updates itself to 1.1.2 on either
+platform. Walk it by hand: install the previous version, let it find the new
+one, and confirm it installs. The tests cover the scripts, not Sparkle's or
+WinSparkle's download-and-swap.
+
+Two rules to keep. The tag must be on a commit that already contains these
+scripts, so merge them to `main` before tagging. And treat the first tag after
+any change to the pipeline as a release you can afford to redo.
