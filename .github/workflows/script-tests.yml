@@ -1,0 +1,57 @@
+name: script-tests
+
+# Tests for the release machinery in scripts/ and installer/, which client-ci does
+# not watch: the feed writer and release job (Python, on all three systems), the
+# macOS script checks (on Linux, and on macOS, whose /bin/bash is 3.2, the one
+# the release script runs under) and the Windows script checks (Windows
+# PowerShell 5.1, the version the release script targets).
+on:
+  push:
+    paths:
+      - "scripts/**"
+      - "installer/**"
+      - ".github/workflows/script-tests.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "installer/**"
+      - ".github/workflows/script-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: python3 }
+          - { os: macos-latest, python: python3 }
+          - { os: windows-latest, python: python }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: ${{ matrix.python }} -I -m unittest discover -s scripts
+
+  bash:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # /bin/bash on purpose: on macOS that is bash 3.2.
+      - run: /bin/bash scripts/test_publish_macos.sh
+
+  powershell:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - shell: powershell
+        run: scripts\test_publish_windows.ps1
