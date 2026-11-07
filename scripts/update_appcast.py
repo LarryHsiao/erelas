@@ -41,13 +41,30 @@ def _load(path):
     return ET.parse(path) if os.path.exists(path) else _new_feed()
 
 
+MACOS = "macos"
+WINDOWS = "windows"
+
+
+def _os_of(item):
+    """The platform an item serves. Items from before the label existed are
+    macOS ones: that was the only platform the feed carried."""
+    enclosure = item.find("enclosure")
+    label = enclosure.get(_tag("os")) if enclosure is not None else None
+    return label or MACOS
+
+
 def _build_of(item):
-    node = item.find(_tag("version"))
+    title = item.findtext("title", default="(untitled)")
+    if _os_of(item) == WINDOWS:
+        text = item.find("enclosure").get(_tag("version"), "")
+        text = text.rpartition("+")[2]
+    else:
+        node = item.find(_tag("version"))
+        text = node.text if node is not None else None
     try:
-        return int(node.text)
-    except (AttributeError, TypeError, ValueError):
-        title = item.findtext("title", default="(untitled)")
-        raise AppcastError(f"feed item {title!r} has no integer sparkle:version")
+        return int(text)
+    except (TypeError, ValueError):
+        raise AppcastError(f"feed item {title!r} has no integer build number")
 
 
 def _make_item(version, build, pub_date, url, length, ed_signature, min_system):
@@ -60,14 +77,29 @@ def _make_item(version, build, pub_date, url, length, ed_signature, min_system):
     ET.SubElement(item, "enclosure", {
         "url": url,
         _tag("edSignature"): ed_signature,
+        _tag("os"): MACOS,
         "length": str(length),
         "type": "application/octet-stream",
     })
     return item
 
 
-def add_item(path, *, version, build, pub_date, url, length, ed_signature,
-             min_system="12.0"):
+def _make_windows_item(version, build, pub_date, url, length, dsa_signature):
+    item = ET.Element("item")
+    ET.SubElement(item, "title").text = f"Version {version}"
+    ET.SubElement(item, "pubDate").text = pub_date
+    ET.SubElement(item, "enclosure", {
+        "url": url,
+        _tag("dsaSignature"): dsa_signature,
+        _tag("version"): f"{version}+{build}",
+        _tag("os"): WINDOWS,
+        "length": str(length),
+        "type": "application/octet-stream",
+    })
+    return item
+
+
+def _insert(path, os_name, build, make_item):
     try:
         build = int(build)
     except (TypeError, ValueError):
@@ -77,33 +109,61 @@ def add_item(path, *, version, build, pub_date, url, length, ed_signature,
     if channel is None:
         raise AppcastError("feed has no <channel>")
     items = channel.findall("item")
-    latest = max((_build_of(i) for i in items), default=None)
+    mine = [i for i in items if _os_of(i) == os_name]
+    latest = max((_build_of(i) for i in mine), default=None)
     if latest is not None and build < latest:
-        raise AppcastError(f"build {build} is older than the feed's latest {latest}")
-    for old in [i for i in items if _build_of(i) == build]:
+        raise AppcastError(
+            f"{os_name} build {build} is older than the feed's latest {latest}")
+    for old in [i for i in mine if _build_of(i) == build]:
         channel.remove(old)
     first_item = len(channel) - len(channel.findall("item"))
-    channel.insert(first_item, _make_item(
-        version, build, pub_date, url, length, ed_signature, min_system))
+    channel.insert(first_item, make_item(build))
     ET.indent(tree, space="    ")
     tree.write(path, encoding="UTF-8", xml_declaration=True)
+
+
+def add_item(path, *, version, build, pub_date, url, length, ed_signature,
+             min_system="12.0"):
+    _insert(path, MACOS, build, lambda n: _make_item(
+        version, n, pub_date, url, length, ed_signature, min_system))
+
+
+def add_windows_item(path, *, version, build, pub_date, url, length,
+                     dsa_signature):
+    _insert(path, WINDOWS, build, lambda n: _make_windows_item(
+        version, n, pub_date, url, length, dsa_signature))
+
+
+def _add_for(parser, args):
+    common = dict(version=args.version, build=args.build,
+                  pub_date=args.pub_date, url=args.url, length=args.length)
+    if args.os == WINDOWS:
+        if not args.dsa_signature:
+            parser.error("--os windows requires --dsa-signature")
+        add_windows_item(args.appcast, dsa_signature=args.dsa_signature,
+                         **common)
+        return
+    if not args.ed_signature:
+        parser.error("--os macos requires --ed-signature")
+    add_item(args.appcast, ed_signature=args.ed_signature,
+             min_system=args.min_system, **common)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--appcast", required=True)
+    parser.add_argument("--os", choices=[MACOS, WINDOWS], default=MACOS)
     parser.add_argument("--version", required=True)
     parser.add_argument("--build", required=True)
     parser.add_argument("--pub-date", required=True)
     parser.add_argument("--url", required=True)
     parser.add_argument("--length", required=True)
-    parser.add_argument("--ed-signature", required=True)
+    parser.add_argument("--ed-signature", help="macOS only")
+    parser.add_argument("--dsa-signature", help="Windows only")
     parser.add_argument("--min-system", default="12.0")
     args = parser.parse_args(argv)
     try:
-        add_item(args.appcast, version=args.version, build=args.build,
-                 pub_date=args.pub_date, url=args.url, length=args.length,
-                 ed_signature=args.ed_signature, min_system=args.min_system)
+        _add_for(parser, args)
     except AppcastError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

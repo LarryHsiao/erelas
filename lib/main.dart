@@ -25,7 +25,9 @@ Future<void> main() async {
   final edge = ValueNotifier(await store.load());
   final window = configureBarWindow(edge.value);
   final expanded = ValueNotifier(false);
-  final updates = Platform.isMacOS ? const UpdateCheck(SparkleSource()) : null;
+  final updates = updatesAvailableOn(Platform.operatingSystem)
+      ? const UpdateCheck(SparkleSource())
+      : null;
   final docked = _tryInstallTray(window, expanded, edge, updates);
   expanded.addListener(
     () => resizeBar(window, expanded: expanded.value, edge: edge.value),

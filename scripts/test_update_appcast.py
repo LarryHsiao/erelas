@@ -92,6 +92,92 @@ class AddItemTest(unittest.TestCase):
             appcast.add_item(self.path, **item_args("abc"))
 
 
+def windows_args(build, version="1.1.1", url="https://example.com/setup.exe"):
+    return dict(
+        version=version,
+        build=build,
+        pub_date="Fri, 06 Nov 2026 12:00:00 +0000",
+        url=url,
+        length=4321,
+        dsa_signature="DSA==",
+    )
+
+
+class WindowsItemTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.path = os.path.join(self.dir.name, "appcast.xml")
+
+    def enclosures(self):
+        root = ET.parse(self.path).getroot()
+        return [i.find("enclosure") for i in root.findall("./channel/item")]
+
+    def oses(self):
+        return [e.get(f"{{{SPARKLE}}}os") for e in self.enclosures()]
+
+    def test_windows_item_carries_what_winsparkle_reads(self):
+        appcast.add_windows_item(self.path, **windows_args(3))
+        enclosure = self.enclosures()[0]
+        expected = {
+            "os": "windows",
+            "version": "1.1.1+3",
+            "signature": "DSA==",
+            "length": "4321",
+            "url": "https://example.com/setup.exe",
+        }
+        actual = {
+            "os": enclosure.get(f"{{{SPARKLE}}}os"),
+            "version": enclosure.get(f"{{{SPARKLE}}}version"),
+            "signature": enclosure.get(f"{{{SPARKLE}}}dsaSignature"),
+            "length": enclosure.get("length"),
+            "url": enclosure.get("url"),
+        }
+        self.assertEqual(actual, expected)
+
+    def test_macos_item_is_labelled_macos(self):
+        appcast.add_item(self.path, **item_args(3, version="1.1.1"))
+        expected = ["macos"]
+        self.assertEqual(self.oses(), expected)
+
+    def test_windows_item_leaves_the_macos_item_alone(self):
+        appcast.add_item(self.path, **item_args(3, version="1.1.1"))
+        appcast.add_windows_item(self.path, **windows_args(3))
+        expected = {"macos", "windows"}
+        self.assertEqual(set(self.oses()), expected)
+
+    def test_windows_item_may_trail_the_macos_build(self):
+        appcast.add_item(self.path, **item_args(5, version="1.2.0"))
+        appcast.add_windows_item(self.path, **windows_args(3))
+        expected = 2
+        self.assertEqual(len(self.enclosures()), expected)
+
+    def test_the_same_windows_build_is_replaced(self):
+        appcast.add_windows_item(self.path, **windows_args(3))
+        appcast.add_windows_item(self.path, **windows_args(3, url="https://example.com/new.exe"))
+        urls = [e.get("url") for e in self.enclosures()]
+        expected = ["https://example.com/new.exe"]
+        self.assertEqual(urls, expected)
+
+    def test_a_lower_windows_build_is_refused(self):
+        appcast.add_windows_item(self.path, **windows_args(3))
+        with self.assertRaises(appcast.AppcastError):
+            appcast.add_windows_item(self.path, **windows_args(2, version="1.1.0"))
+        expected = 1
+        self.assertEqual(len(self.enclosures()), expected)
+
+    def test_a_legacy_unlabelled_item_counts_as_macos(self):
+        with open(self.path, "w") as feed:
+            feed.write(
+                "<rss xmlns:sparkle='%s' version='2.0'><channel><item>"
+                "<title>x</title><sparkle:version>9</sparkle:version>"
+                "<enclosure url='u' length='1'/></item></channel></rss>" % SPARKLE
+            )
+        appcast.add_windows_item(self.path, **windows_args(3))
+        expected = 2
+        self.assertEqual(len(self.enclosures()), expected)
+
+
 class HandEditedFeedTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()

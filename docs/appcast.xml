@@ -10,7 +10,7 @@
             <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 06 Nov 2026 18:49:49 +0000</pubDate>
-            <enclosure url="https://github.com/LarryHsiao/erelas/releases/download/v1.1.1/erelas.dmg" sparkle:edSignature="nQ1EqMb543HYDRiSQDIe+FIddoZVlPO6dhSeAFMqeI4iBbQHqcJLBMjj3a2bZrkFD1jEkxaJ/nuoR763MtNbCw==" length="21499192" type="application/octet-stream" />
+            <enclosure url="https://github.com/LarryHsiao/erelas/releases/download/v1.1.1/erelas.dmg" sparkle:edSignature="nQ1EqMb543HYDRiSQDIe+FIddoZVlPO6dhSeAFMqeI4iBbQHqcJLBMjj3a2bZrkFD1jEkxaJ/nuoR763MtNbCw==" sparkle:os="macos" length="21499192" type="application/octet-stream" />
         </item>
         <item>
             <title>Version 1.1.0</title>
@@ -18,7 +18,7 @@
             <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
             <pubDate>Fri, 06 Nov 2026 18:11:53 +0000</pubDate>
-            <enclosure url="https://github.com/LarryHsiao/erelas/releases/download/v1.1.0/erelas.dmg" sparkle:edSignature="AjuH6VJDKBgFkDB/zlvljhd5XEVzkC1ZIBq754sCQvRAMC7pIEZOiTXgkv4AoXIGibV/V3iZRSJ81NQuGQGTDg==" length="21499175" type="application/octet-stream" />
+            <enclosure url="https://github.com/LarryHsiao/erelas/releases/download/v1.1.0/erelas.dmg" sparkle:edSignature="AjuH6VJDKBgFkDB/zlvljhd5XEVzkC1ZIBq754sCQvRAMC7pIEZOiTXgkv4AoXIGibV/V3iZRSJ81NQuGQGTDg==" sparkle:os="macos" length="21499175" type="application/octet-stream" />
         </item>
     </channel>
 </rss>
