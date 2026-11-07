@@ -22,15 +22,44 @@ python3 -I -m unittest discover -s writer   # writer tests
 fvm flutter test                            # client tests (Flutter 3.47.9, see .fvmrc)
 ```
 
-## Releasing the macOS app
+## Releasing
 
-`scripts/publish_macos.sh` builds, signs, notarizes and staples
-`build/publish/erelas.dmg`; with `--publish` it also uploads it to a **draft**
-GitHub release `v<VERSION>` (the version in `pubspec.yaml`), tagged at the
-built commit. macOS only. The app checks for updates itself (Sparkle), at launch
-and once a day, or from the ◆ menu's "Check for Updates…".
+**A release is a tag.** Push `v<VERSION>` (the version in `pubspec.yaml`, with
+its `+N` build number raised, on a commit that `main` contains) and the
+pipeline in [`docs/releasing.md`](docs/releasing.md) runs by itself:
 
-One-time setup, on the releasing Mac:
+1. TeamCity builds, signs and uploads both platforms to a **draft** GitHub
+   release `v<VERSION>`: the macOS `.dmg` and the Windows installer. Each build
+   also uploads an `update-<os>.json` holding its own Sparkle or WinSparkle
+   signature, made on that platform's machine.
+2. When both have uploaded, `scripts/publish_release.py` promotes the draft and
+   adds both items to `docs/appcast.xml` in **one commit** to `main`; GitHub
+   Pages serves it at `https://larryhsiao.github.io/erelas/appcast.xml`. If
+   either build fails, the draft stays and the feed is not touched.
+3. Installed apps check at launch and once a day (Sparkle on macOS, WinSparkle
+   on Windows), or from the tray menu's "Check for Updates…".
+
+Sparkle and WinSparkle compare the build number, so every release needs a
+higher one; the feed writer refuses a lower build than the platform's latest.
+Version 1.0.0 contains no updater, so those copies must be replaced by hand
+once, with the first release that includes it.
+
+### What runs on each machine
+
+On the Mac (needs `IDENTITY`, see below), for a tag build:
+
+```
+IDENTITY=<hash> scripts/publish_macos.sh --publish
+```
+
+It builds, signs, notarizes and staples `build/publish/erelas.dmg`, signs it for
+Sparkle with the key in the Mac's keychain (`macos/Pods/Sparkle/bin/generate_keys
+-p` prints the public half, which is `SUPublicEDKey` in `Info.plist`), and
+uploads both to the draft. Without `--publish` it only builds. With `--publish`
+it refuses unless HEAD carries the tag `v<VERSION>` and `origin/main` contains
+it; without, it wants a clean, pushed `main`. Either way it refuses without
+`IDENTITY` or a working notary profile, on a dirty tree, or when `analyze` or
+the tests fail. One-time setup on the Mac:
 
 ```
 security find-identity -v -p codesigning          # note the Developer ID Application hash
@@ -39,54 +68,51 @@ xcrun notarytool store-credentials erelas-notary --apple-id <Apple ID> --team-id
 
 (`store-credentials` asks for an app-specific password from account.apple.com.)
 
-Each release, from a clean, pushed `main` with the version bumped:
+On Windows, for a tag build:
 
 ```
-IDENTITY=<hash> scripts/publish_macos.sh --publish
-gh release edit v<VERSION> --draft=false          # after looking at the draft
-scripts/publish_feed_macos.sh                     # then offer it to installed copies
+powershell -File scripts\publish_windows.ps1 -Publish
 ```
 
-The feed step signs the public DMG with the Sparkle key in this Mac's keychain
-(`macos/Pods/Sparkle/bin/generate_keys -p` prints the public half, which is
-`SUPublicEDKey` in `Info.plist`), adds the release to `docs/appcast.xml` and
-pushes it; GitHub Pages serves it at
-`https://larryhsiao.github.io/erelas/appcast.xml`. Sparkle compares the build
-number (the `+N` in `pubspec.yaml`), so every release needs a higher one. The
-feed script refuses a draft release or a build lower than the feed's latest.
-Version 1.0.0 contains no updater, so those copies must be replaced by hand
-once, with the first release that includes Sparkle.
+It builds and signs `build\publish\erelas-setup-<VERSION>.exe` (Flutter via
+`fvm`, Inno Setup 6, `signtool`), signs it for WinSparkle, and uploads both to
+the same draft. Without `-Publish` it only builds. With `-Publish` it refuses
+unless HEAD carries the tag and `origin/main` contains it. The code-signing
+certificate comes from `WINDOWS_CODESIGN_PFX_BASE64` and `CERT_PASSWORD` when
+set, otherwise from the Vaultwarden item `erelas-windows-codesign` (password
+field = base64 of the `.pfx`, notes field = its password). The update key is the
+DSA key in the Vaultwarden item `orthanc-winsparkle-dsa` (the one Orthanc uses);
+its public half is `dsa_pub.pem`, compiled into the exe by
+`windows/runner/Runner.rc`. The private half is read only while signing and is
+gitignored. Secrets are read through `bash`, so `bw serve` must be running and
+unlocked, and Git Bash must come before any WSL `bash.exe` on `PATH`. The
+certificate is self-signed, so Windows shows a SmartScreen warning on a fresh
+download; updates are unaffected, because WinSparkle checks the DSA signature.
 
-### Windows
+Anywhere with Python, git and `gh`, once per release (TeamCity runs it after
+both uploads):
 
 ```
-powershell -File scripts\publish_windows.ps1 -Publish   # builds, signs, uploads to the same draft release
-gh release edit v<VERSION> --draft=false          # after looking at the draft
-powershell -File scripts\publish_feed_windows.ps1 # then offer it to installed copies
+python3 -I scripts/publish_release.py v<VERSION>
 ```
 
-The signing certificate comes from `WINDOWS_CODESIGN_PFX_BASE64` and `CERT_PASSWORD` when
-those are set, otherwise from the Vaultwarden item `erelas-windows-codesign` (password field =
-base64 of the `.pfx`, notes field = its password). `publish_windows.ps1` needs Flutter (via `fvm`), Inno Setup 6 and `signtool`,
-and the same clean, pushed `main` as the macOS script; without `-Publish` it
-only builds `build\publish\erelas-setup-<VERSION>.exe`. The feed step adds a
-`sparkle:os="windows"` item to the same `docs/appcast.xml`, leaving the macOS
-item alone. WinSparkle compares the item's `sparkle:version` with the exe's
-ProductVersion, which Flutter writes as `<version>+<build>` (`1.1.1+3`), so the
-item carries that exact string and the build number must still rise every
-release. Both steps read their secrets through `bash` (and so need `bw serve` running and unlocked, unless
-the two variables are set by hand), so Git Bash must come before any WSL `bash.exe` on `PATH`. The installer is signed with the DSA key in Vaultwarden (item
-`orthanc-winsparkle-dsa`, the one Orthanc uses); its public half is
-`dsa_pub.pem`, compiled into the exe by `windows/runner/Runner.rc`. The private
-half is read only while signing and is gitignored. Tested with
-`powershell -File scripts\test_publish_windows.ps1`. The update flow itself
-(download, verify, swap) is WinSparkle's and has not yet been walked on a
-Windows machine; the first Windows release is the occasion to do so.
+It refuses, changing nothing, unless the tree is clean, the tag is on origin and
+in `origin/main` and equals `v` plus the pubspec version, and both handoff files
+name this version and build with an asset whose size on the release equals the
+size that was signed. It runs on a throwaway checkout of `origin/main`, so the
+caller's tree is never touched, rebases over a lost push race, and aborts on a
+conflicting edit instead of forcing. Re-running it after a partial failure is
+safe.
 
-The script refuses to run without `IDENTITY` or a working notary profile, on a
-dirty tree, off `main`, with unpushed commits, or when `analyze` or the tests
-fail. With `--publish` it also refuses when `gh` is not logged in, when the tag
-already names another commit, or when the release exists and is not a draft at
-the built commit. The checks are tested with `bash scripts/test_publish_macos.sh` and
-`bash scripts/test_publish_feed_macos.sh`, and the feed writer with
-`python3 -I -m unittest discover -s scripts -p 'test_update_appcast.py'`.
+### Tests
+
+```
+bash scripts/test_publish_macos.sh                              # macOS script checks
+powershell -File scripts\test_publish_windows.ps1               # Windows script checks
+python3 -I -m unittest discover -s scripts                      # feed writer and release job
+```
+
+The update flow itself (download, verify, swap) belongs to Sparkle and
+WinSparkle and is not run by these tests. The macOS signing and the Windows
+download-and-swap have not yet been walked on real machines; the first release
+through the pipeline is the occasion to do so.
