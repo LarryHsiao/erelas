@@ -39,7 +39,7 @@ and only tags, are builds.
 |---|---|---|---|
 | `Erelas_ReleaseMac` | `exists tools.xcode.version` | `scripts/publish_macos.sh --publish` (it runs `analyze` and the tests itself) | none of its own; runs as a snapshot dependency of `Erelas_Publish` |
 | `Erelas_ReleaseWindows` | `teamcity.agent.jvm.os.name contains Windows` | `fvm flutter analyze` and `fvm flutter test`, then `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish_windows.ps1 -Publish` | none of its own; runs as a snapshot dependency of `Erelas_Publish` |
-| `Erelas_Publish` | `teamcity.agent.jvm.os.name contains Mac` | give git the `gh` credential helper and an identity, then `python3 -I scripts/publish_release.py "%teamcity.build.branch%"` (the script strips a leading `refs/tags/`) | **the one VCS trigger**, branch filter `+:v*`; snapshot dependencies on both release configs |
+| `Erelas_Publish` | `teamcity.agent.jvm.os.name contains Mac` | give git the build's token and an identity, then `python3 -I scripts/publish_release.py "%teamcity.build.branch%"` (the script strips a leading `refs/tags/`) | **the one VCS trigger**, branch filter `+:v*`; snapshot dependencies on both release configs |
 
 The trigger sits on `Erelas_Publish` because a snapshot dependency pulls the
 builds in behind the job that depends on them, not the other way round. The
@@ -76,12 +76,23 @@ supplies the WinSparkle DSA key (the Windows agent). No signing key is needed by
 `Erelas_Publish`: it only reads the signatures the builds recorded.
 
 `Erelas_Publish` pushes to `main`, and `git push` does not use `GH_TOKEN` (that
-authenticates only `gh`). Its step therefore sets, for that checkout only,
-`credential.https://github.com.helper` to `!gh auth git-credential` and a git
-identity (`Larry Hsiao <bleakeraser1997@gmail.com>`, the one the earlier feed
-commits carry), because it makes a commit. If `main` is protected, allow that identity to bypass. A refused
-push fails loudly, with git's own reason in the message; the draft is already
-promoted by then, and re-running the job is safe.
+authenticates only `gh`), so its step supplies the token to git itself. On the
+Mac agent git already holds a saved GitHub login for a different account, which
+answers git's credential question first and is refused (`403 Permission ... denied
+to larryhsiao-jubo`, as the first run of 1.1.2 showed). The step therefore clears
+git's helper list for that checkout (`credential.helper ''`) and adds an inline
+helper that returns `x-access-token` and `$GH_TOKEN`; nothing is written to disk.
+It also sets a git identity (`Larry Hsiao <bleakeraser1997@gmail.com>`, the one
+the earlier feed commits carry), because it makes a commit. If `main` is
+protected, allow that identity to bypass. A refused push fails loudly, with git's
+own reason in the message; the draft is already promoted by then, and re-running
+the job is safe.
+
+To re-run only the publish job for a tag, queue `Erelas_Publish` on the tag's
+branch and let TeamCity reuse the existing release builds; it will briefly list
+them as queued, and they resolve to the earlier successful builds. Note that
+TeamCity's build list shows only the default branch unless the locator carries
+`branch:default:any`, so a tag build is invisible without it.
 
 ## Before the first release through it
 
