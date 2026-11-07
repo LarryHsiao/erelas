@@ -112,3 +112,6 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 if ($script:failed -gt 0) { Write-Host "$script:failed failed"; exit 1 }
 Write-Host 'all passed'
+# Explicit, because a runner that invokes this with -command takes the exit code
+# from the last native command, which here is a git call that fails on purpose.
+exit 0
