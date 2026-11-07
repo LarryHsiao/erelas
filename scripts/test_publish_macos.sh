@@ -203,4 +203,52 @@ expected=1
 actual="$(run_single_release 0)"
 expect_equal "no release for the tag is refused" "$expected" "$actual"
 
+# Headless signing (TeamCity): triggered by DEVELOPER_ID_CERT_BASE64.
+ci_env_status() { # the name to leave unset, or "" -> prints require_ci_env's status
+  (
+    export DEVELOPER_ID_CERT_BASE64=a DEVELOPER_ID_CERT_PASSWORD=b NOTARY_API_KEY_BASE64=c \
+           NOTARY_API_KEY_ID=d KEYCHAIN_PASSWORD=e
+    [ -n "$1" ] && unset "$1"
+    require_ci_env >/dev/null 2>&1
+  )
+  echo $?
+}
+
+expected=0
+actual="$(ci_env_status "")"
+expect_equal "headless signing with every variable set passes" "$expected" "$actual"
+
+expected=1
+actual="$(ci_env_status KEYCHAIN_PASSWORD)"
+expect_equal "headless signing without the keychain password is refused" "$expected" "$actual"
+
+expected=1
+actual="$(ci_env_status NOTARY_API_KEY_BASE64)"
+expect_equal "headless signing without the notary key is refused" "$expected" "$actual"
+
+expected=0
+actual="$( (DEVELOPER_ID_CERT_BASE64=x; is_ci_signing); echo $? )"
+expect_equal "a certificate in the environment selects headless signing" "$expected" "$actual"
+
+expected=1
+actual="$( (unset DEVELOPER_ID_CERT_BASE64; is_ci_signing); echo $? )"
+expect_equal "no certificate selects the interactive mode" "$expected" "$actual"
+
+UUID=12345678-1234-1234-1234-123456789abc
+expected="--keychain-profile|erelas-notary|"
+actual="$( (unset DEVELOPER_ID_CERT_BASE64; NOTARY_PROFILE=erelas-notary; notary_auth_args /tmp/k) | tr '\n' '|' )"
+expect_equal "interactive notarization uses the keychain profile" "$expected" "$actual"
+
+expected="--key|/tmp/k|--key-id|KID|--issuer|$UUID|"
+actual="$( (DEVELOPER_ID_CERT_BASE64=x; NOTARY_API_KEY_ID=KID; NOTARY_API_ISSUER_ID=$UUID; notary_auth_args /tmp/k) | tr '\n' '|' )"
+expect_equal "a team API key passes its issuer" "$expected" "$actual"
+
+expected="--key|/tmp/k|--key-id|KID|"
+actual="$( (DEVELOPER_ID_CERT_BASE64=x; NOTARY_API_KEY_ID=KID; NOTARY_API_ISSUER_ID=2SX9WGZ5F8; notary_auth_args /tmp/k) | tr '\n' '|' )"
+expect_equal "an issuer that is not a UUID is left out" "$expected" "$actual"
+
+expected="--key|/tmp/k|--key-id|KID|"
+actual="$( (DEVELOPER_ID_CERT_BASE64=x; NOTARY_API_KEY_ID=KID; unset NOTARY_API_ISSUER_ID; notary_auth_args /tmp/k) | tr '\n' '|' )"
+expect_equal "an individual API key has no issuer" "$expected" "$actual"
+
 exit "$FAILED"

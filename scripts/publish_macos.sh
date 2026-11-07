@@ -23,7 +23,7 @@
 # supported here.
 #
 # Environment:
-#   IDENTITY  required: the SHA-1 of the "Developer ID Application" signing
+#   IDENTITY  required for an interactive run: the SHA-1 of the "Developer ID Application" signing
 #             identity. This Mac holds two certificates under one name, so a
 #             name is ambiguous; list them with
 #             `security find-identity -v -p codesigning`.
@@ -35,12 +35,21 @@
 #   FLUTTER   the Flutter command (default: "fvm flutter")
 #   DART      the Dart command that runs Sparkle's signing tool (default:
 #             "fvm dart")
+#
+# Headless signing (TeamCity): when DEVELOPER_ID_CERT_BASE64 is set, IDENTITY and
+# the notary profile are not used. Set instead DEVELOPER_ID_CERT_BASE64 and
+# DEVELOPER_ID_CERT_PASSWORD (the Developer ID Application .p12),
+# NOTARY_API_KEY_BASE64 and NOTARY_API_KEY_ID (an App Store Connect API key, with
+# NOTARY_API_ISSUER_ID for a team key) and KEYCHAIN_PASSWORD (any value, for the
+# throwaway keychain that holds the certificate for this run). Orthanc's CI
+# script works the same way.
 set -euo pipefail
 
 APP_NAME="erelas"
 RELEASE_BRANCH="main"
 FLUTTER="${FLUTTER:-fvm flutter}"
 DART="${DART:-fvm dart}"
+KEYCHAIN_ARGS=()
 NOTARY_PROFILE="${NOTARY_PROFILE:-erelas-notary}"
 OUTPUT_DIR="build/publish"
 ENTITLEMENTS="macos/Runner/Release.entitlements"
@@ -130,9 +139,100 @@ require_notary_profile() {
     || fail "notarytool profile '$NOTARY_PROFILE' is missing or rejected - see the header"
 }
 
+# Headless signing: a certificate and a notary API key arrive as environment
+# variables, and a throwaway keychain holds the certificate for this run.
+CI_VARS=(DEVELOPER_ID_CERT_BASE64 DEVELOPER_ID_CERT_PASSWORD NOTARY_API_KEY_BASE64
+  NOTARY_API_KEY_ID KEYCHAIN_PASSWORD)
+NOTARY_ISSUER_UUID='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+CI_WORK=""
+
+is_ci_signing() { [ -n "${DEVELOPER_ID_CERT_BASE64:-}" ]; }
+
+require_ci_env() {
+  local name
+  for name in "${CI_VARS[@]}"; do
+    [ -n "${!name:-}" ] || fail "$name is not set (headless signing needs: ${CI_VARS[*]})"
+  done
+}
+
+require_signing_credentials() {
+  if is_ci_signing; then
+    require_ci_env
+  else
+    require_identity
+    require_notary_profile
+  fi
+}
+
+# One notarytool argument per line. An issuer is a UUID only for a team API key;
+# an individual key takes none, and notarytool rejects anything else, so it is
+# passed only when it looks like one.
+notary_auth_args() { # key-file
+  if ! is_ci_signing; then
+    printf '%s\n' --keychain-profile "$NOTARY_PROFILE"
+    return 0
+  fi
+  printf '%s\n' --key "$1" --key-id "$NOTARY_API_KEY_ID"
+  if [[ "${NOTARY_API_ISSUER_ID:-}" =~ $NOTARY_ISSUER_UUID ]]; then
+    printf '%s\n' --issuer "$NOTARY_API_ISSUER_ID"
+  fi
+}
+
+cleanup_ci_signing() {
+  if [ -n "${KEYCHAIN_PATH:-}" ]; then
+    security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+  fi
+  if [ -n "$CI_WORK" ]; then
+    rm -rf "$CI_WORK"
+  fi
+}
+
+import_ci_certificate() {
+  KEYCHAIN_PATH="$CI_WORK/build.keychain-db"
+  printf '%s' "$DEVELOPER_ID_CERT_BASE64" | base64 --decode > "$CI_WORK/cert.p12"
+  security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+  security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+  security import "$CI_WORK/cert.p12" -k "$KEYCHAIN_PATH" \
+    -P "$DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+  security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+    -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+}
+
+# codesign finds the identity only through the user's keychain search list.
+add_ci_keychain_to_search_list() {
+  local existing
+  existing=$(security list-keychains -d user | tr -d '"' | xargs)
+  # shellcheck disable=SC2086
+  security list-keychains -d user -s "$KEYCHAIN_PATH" $existing
+}
+
+find_ci_identity() {
+  IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+    | grep "Developer ID Application" | head -1 | awk '{print $2}') || true
+  [ -n "$IDENTITY" ] || fail "no Developer ID Application identity in the build keychain"
+}
+
+setup_ci_signing() {
+  CI_WORK=$(mktemp -d)
+  trap cleanup_ci_signing EXIT
+  printf '%s' "$NOTARY_API_KEY_BASE64" | base64 --decode > "$CI_WORK/notary.p8"
+  NOTARY_KEY_PATH="$CI_WORK/notary.p8"
+  import_ci_certificate
+  add_ci_keychain_to_search_list
+  find_ci_identity
+  KEYCHAIN_ARGS=(--keychain "$KEYCHAIN_PATH")
+  echo "==> Headless signing with a temporary keychain"
+}
+
+setup_signing() {
+  if is_ci_signing; then
+    setup_ci_signing
+  fi
+}
+
 preflight() {
-  require_identity
-  require_notary_profile
+  require_signing_credentials
   require_clean_tree
   if [ "$PUBLISH" -eq 1 ]; then
     require_gh
@@ -163,9 +263,9 @@ sign_app() {
     find "$frameworks" -depth \( -type f -perm -u+x -o -name "*.dylib" \
       -o -name "*.framework" -o -name "*.xpc" -o -name "*.app" \) -print0 \
       | xargs -0 -I{} codesign --force --options runtime --timestamp \
-        --sign "$IDENTITY" "{}"
+        ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} --sign "$IDENTITY" "{}"
   fi
-  codesign --force --options runtime --timestamp \
+  codesign --force --options runtime --timestamp ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} \
     --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP_PATH"
   codesign --verify --strict --verbose=2 "$APP_PATH"
 }
@@ -183,18 +283,21 @@ build_dmg() {
   hdiutil create -volname "$APP_NAME" -srcfolder "$stage" -ov \
     -format UDZO "$DMG_PATH"
   rm -rf "$stage"
-  codesign --force --timestamp --sign "$IDENTITY" "$DMG_PATH"
+  codesign --force --timestamp ${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"} --sign "$IDENTITY" "$DMG_PATH"
   codesign --verify --strict --verbose=2 "$DMG_PATH"
 }
 
 # Notarization takes minutes. `--wait` can exit 0 on an Invalid result, so the
 # printed status decides, not the exit code.
 notarize_dmg() {
-  local log
+  local log line args
+  args=()
+  while IFS= read -r line; do
+    args+=("$line")
+  done < <(notary_auth_args "${NOTARY_KEY_PATH:-}")
   log=$(mktemp)
   echo "==> Submitting to Apple notary service (this can take several minutes)"
-  xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" \
-    --wait 2>&1 | tee "$log"
+  xcrun notarytool submit "$DMG_PATH" "${args[@]}" --wait 2>&1 | tee "$log"
   grep -q "status: Accepted" "$log" || fail "notarization was not accepted"
   rm -f "$log"
   xcrun stapler staple "$DMG_PATH"
@@ -283,6 +386,7 @@ main() {
   VERSION=$(read_version)
   echo "==> Version: $VERSION"
   preflight
+  setup_signing
   build_release
   sign_app
   build_dmg
