@@ -27,6 +27,7 @@ class RecordingSource implements UpdateSource {
 }
 
 void main() {
+  _updatesAvailableTests();
   test(
     'start points Sparkle at the feed, sets the interval, then checks',
     () async {
@@ -83,5 +84,28 @@ void main() {
   test('a failure during checkNow is swallowed', () async {
     final source = RecordingSource(failOn: 'now');
     await expectLater(UpdateCheck(source).checkNow(), completes);
+  });
+}
+
+void _updatesAvailableTests() {
+  group('updatesAvailableOn', () {
+    test('macOS and Windows have an updater', () {
+      final expected = [true, true];
+      final actual = [
+        updatesAvailableOn('macos'),
+        updatesAvailableOn('windows'),
+      ];
+      expect(actual, expected);
+    });
+
+    test('other platforms do not', () {
+      final expected = [false, false, false];
+      final actual = [
+        updatesAvailableOn('linux'),
+        updatesAvailableOn('android'),
+        updatesAvailableOn('ios'),
+      ];
+      expect(actual, expected);
+    });
   });
 }

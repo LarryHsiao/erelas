@@ -4,8 +4,13 @@ import 'package:flutter/foundation.dart' show debugPrint;
 const String updateFeedUrl = 'https://larryhsiao.github.io/erelas/appcast.xml';
 const Duration updateCheckInterval = Duration(hours: 24);
 
-/// What the update check needs from Sparkle. [AutoUpdater] has a private
-/// constructor, so this seam is what lets a test stand in for it.
+/// Whether [operatingSystem] (as `Platform.operatingSystem` spells it) has an
+/// updater: Sparkle on macOS, WinSparkle on Windows.
+bool updatesAvailableOn(String operatingSystem) =>
+    operatingSystem == 'macos' || operatingSystem == 'windows';
+
+/// What the update check needs from Sparkle or WinSparkle. [AutoUpdater] has a
+/// private constructor, so this seam is what lets a test stand in for it.
 abstract interface class UpdateSource {
   Future<void> setFeedUrl(String url);
   Future<void> setCheckInterval(Duration interval);
