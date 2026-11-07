@@ -46,7 +46,7 @@ once, with the first release that includes it.
 
 ### What runs on each machine
 
-On the Mac (needs `IDENTITY`, see below), for a tag build:
+On the Mac, for a tag build (TeamCity runs it headlessly; see below for both ways):
 
 ```
 IDENTITY=<hash> scripts/publish_macos.sh --publish
@@ -58,8 +58,15 @@ Sparkle with the key in the Mac's keychain (`macos/Pods/Sparkle/bin/generate_key
 uploads both to the draft. Without `--publish` it only builds. With `--publish`
 it refuses unless HEAD carries the tag `v<VERSION>` and `origin/main` contains
 it; without, it wants a clean, pushed `main`. Either way it refuses without
-`IDENTITY` or a working notary profile, on a dirty tree, or when `analyze` or
-the tests fail. One-time setup on the Mac:
+signing credentials, on a dirty tree, or when `analyze` or the tests fail.
+
+Signing credentials come one of two ways. A **headless** run (TeamCity) sets
+`DEVELOPER_ID_CERT_BASE64` and the other variables listed in the script's header:
+it builds a throwaway keychain from them and notarizes with an API key, so it
+needs no signing identity or notary profile installed on the machine (it still
+needs Xcode, Flutter via `fvm`, CocoaPods, `gh`, and the Sparkle key in the
+keychain). An **interactive** run uses `IDENTITY` and
+a stored notary profile instead, set up once on the Mac:
 
 ```
 security find-identity -v -p codesigning          # note the Developer ID Application hash
