@@ -1,59 +1,80 @@
 <#
 .SYNOPSIS
   Erelas - build the signed Windows installer; with -Publish, also upload it
-  to the draft GitHub release v<VERSION>.
+  and its update handoff to the draft GitHub release v<VERSION>.
 
 .DESCRIPTION
   Runs scripts\build_windows.ps1 (which needs WINDOWS_CODESIGN_PFX_BASE64 and
   CERT_PASSWORD - taken from the environment when both are set, else from the
-  Vaultwarden item erelas-windows-codesign), then with -Publish uploads build\publish\erelas-setup-<VERSION>.exe
-  to a draft release tagged at the built commit - the same release the macOS
-  script fills with the .dmg. A release that exists is reused only while it is
-  still a draft at this commit; a public one is never touched.
+  Vaultwarden item erelas-windows-codesign).
 
-  Refuses on a dirty tree, off main, with unpushed commits, and (with -Publish)
-  when gh is not logged in.
+  With -Publish it then creates the draft release v<VERSION> if the macOS build
+  has not already, signs the installer for WinSparkle (DSA key from the
+  Vaultwarden item orthanc-winsparkle-dsa, the one Orthanc uses) and uploads
+  build\publish\erelas-setup-<VERSION>.exe plus update-windows.json to it. It
+  does NOT touch the update feed: scripts\publish_release.py does that once,
+  after both platforms have uploaded.
 
-  After looking at the draft:
-    gh release edit v<VERSION> --draft=false
-    powershell -File scripts\publish_feed_windows.ps1   # offer it to installed copies
+  Refuses on a dirty tree. With -Publish it also refuses unless gh is logged
+  in, HEAD carries the tag v<VERSION> and origin/main contains that tag; a
+  release that exists is reused only while it is still a draft.
+
+  This is what TeamCity runs on a tag build, so the tag IS the release decision.
 
   Platforms: Windows only (Inno Setup and signtool).
 #>
 param([switch]$Publish)
 $ErrorActionPreference = 'Stop'
 
-$ReleaseBranch = 'main'
-
 function Fail([string]$Message) { throw $Message }
 
-# "version: 1.1.1+3" -> "1.1.1"; throws when the line is absent.
-function Get-Version([string[]]$PubspecLines) {
-  $line = $PubspecLines | Where-Object { $_ -match '^version:\s*(\d+\.\d+\.\d+)' } | Select-Object -First 1
-  if (-not $line) { Fail 'could not read the version from pubspec.yaml' }
-  return $Matches[1]
+# "version: 1.1.1+3" -> @{ Version = '1.1.1'; Build = '3' }; throws when absent.
+function Get-VersionParts([string[]]$PubspecLines) {
+  $line = $PubspecLines | Where-Object { $_ -match '^version:\s*(\d+\.\d+\.\d+)\+(\d+)' } | Select-Object -First 1
+  if (-not $line) { Fail 'pubspec has no "version: x.y.z+N" line' }
+  return @{ Version = $Matches[1]; Build = $Matches[2] }
 }
 
-function Assert-ReleaseState([object[]]$Releases, [string]$Tag, [string]$Head) {
+function Assert-ReleaseState([object[]]$Releases, [string]$Tag) {
   $found = $Releases | Where-Object { $_.tagName -eq $Tag } | Select-Object -First 1
   if (-not $found) { return 'create' }
-  if ($found.isDraft -and $found.targetCommitish -eq $Head) { return 'reuse' }
-  Fail "release $Tag exists and is not a draft at $Head - delete it or bump the version"
+  if ($found.isDraft) { return 'reuse' }
+  Fail "release $Tag is already public - bump the version"
 }
 
 function Assert-CleanTree {
   if (git status --porcelain) { Fail 'the working tree is not clean' }
 }
 
-function Assert-OnReleaseBranch {
-  $branch = git rev-parse --abbrev-ref HEAD
-  if ($branch -ne $ReleaseBranch) { Fail "not on $ReleaseBranch (on $branch)" }
+# The release is decided by a tag: HEAD must carry v<version>, and main must
+# contain it, so what ships is what was merged.
+function Get-TagCommit([string[]]$LsRemote) {
+  $peeled = $LsRemote | Where-Object { $_ -match '\^\{\}$' } | Select-Object -First 1
+  $line = if ($peeled) { $peeled } else { $LsRemote | Select-Object -First 1 }
+  return ($line -split '\s+')[0]
 }
 
-function Assert-Pushed {
-  git fetch -q origin $ReleaseBranch
-  if ($LASTEXITCODE -ne 0) { Fail 'could not fetch origin' }
-  if (git rev-list "origin/$ReleaseBranch..HEAD") { Fail "unpushed commits on $ReleaseBranch" }
+# Origin is asked, not the local tag list: a CI checkout may carry no local tag,
+# and an unpushed local tag must not pass.
+function Assert-TagAtHead([string]$Version) {
+  $tag = "v$Version"
+  $refs = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
+  if ($LASTEXITCODE -ne 0) { Fail "could not ask origin about tag $tag" }
+  if ($refs.Count -eq 0) { Fail "tag $tag is not on origin - push the tag to release" }
+  if ((Get-TagCommit $refs) -ne (git rev-parse HEAD)) { Fail "tag $tag is not at HEAD" }
+  git fetch -q origin main
+  if ($LASTEXITCODE -ne 0) { Fail 'could not fetch origin/main' }
+  git merge-base --is-ancestor HEAD origin/main
+  if ($LASTEXITCODE -ne 0) { Fail "tag $tag is not contained in origin/main" }
+}
+
+# Two builds creating the draft in the same instant can each make one, splitting
+# the assets; better to stop loudly than to leave that for the feed job to find.
+function Assert-SingleRelease([object[]]$Releases, [string]$Tag) {
+  $count = @($Releases | Where-Object { $_.tagName -eq $Tag }).Count
+  if ($count -ne 1) {
+    Fail "expected exactly one release for $Tag, found $count - two builds may each have created a draft; merge them by hand"
+  }
 }
 
 function Assert-GhLoggedIn {
@@ -66,19 +87,20 @@ function Assert-GhLoggedIn {
   if (-not $loggedIn) { Fail 'gh is not logged in' }
 }
 
-# The code-signing certificate: values already in the environment win; otherwise
-# they come from the Vaultwarden item erelas-windows-codesign (password field =
-# base64 of the .pfx, notes field = its password) through secret.sh. They are
-# set for this process only, so build_windows.ps1 inherits them and nothing is
-# written to disk.
-function Read-VaultField([string]$Field) {
-  try { $out = & bash "$HOME/.claude/hooks/secret.sh" erelas-windows-codesign $Field - }
+# Secrets come from Vaultwarden through secret.sh (Git Bash must come before any
+# WSL bash.exe on PATH). Nothing here is written to disk or printed.
+function Read-VaultField([string]$Item, [string]$Field) {
+  try { $out = & bash "$HOME/.claude/hooks/secret.sh" $Item $Field - }
   catch { return $null }
   if ($LASTEXITCODE -ne 0) { return $null }
   return ($out -join '')
 }
 
-function Set-SigningEnv([scriptblock]$Read = { param($field) Read-VaultField $field }) {
+# The code-signing certificate: values already in the environment win; otherwise
+# the Vaultwarden item erelas-windows-codesign (password field = base64 of the
+# .pfx, notes field = its password). Set for this process only, so
+# build_windows.ps1 inherits them.
+function Set-SigningEnv([scriptblock]$Read = { param($field) Read-VaultField 'erelas-windows-codesign' $field }) {
   if ($env:WINDOWS_CODESIGN_PFX_BASE64 -and $env:CERT_PASSWORD) { return }
   $pfx = & $Read 'password'
   $password = & $Read 'notes'
@@ -89,30 +111,83 @@ function Set-SigningEnv([scriptblock]$Read = { param($field) Read-VaultField $fi
   $env:CERT_PASSWORD = $password.Trim()
 }
 
-function Publish-Release([string]$Tag, [string]$Installer) {
-  $head = git rev-parse HEAD
-  $releases = gh release list --limit 100 --json tagName,isDraft,targetCommitish | ConvertFrom-Json
-  if ((Assert-ReleaseState $releases $Tag $head) -eq 'create') {
-    Write-Host "==> Creating draft release $Tag at $($head.Substring(0, 7))"
-    gh release create $Tag --draft --title $Tag --generate-notes --target $head
-    if ($LASTEXITCODE -ne 0) { Fail "gh release create exited $LASTEXITCODE" }
+# sign_update prints: sparkle:dsaSignature="..." length="0". The length it
+# prints on Windows is always 0, so only the signature is taken from it.
+function Get-DsaSignature([string]$SignOutput) {
+  if ($SignOutput -notmatch 'sparkle:dsaSignature="([^"]+)"') {
+    Fail "no signature in sign_update output: $SignOutput"
   }
-  gh release upload $Tag $Installer --clobber
+  return $Matches[1]
+}
+
+# sign_update reads dsa_priv.pem from the working directory; it is gitignored and
+# removed in the finally block.
+function Get-InstallerSignature([string]$Installer) {
+  $b64 = Read-VaultField 'orthanc-winsparkle-dsa' 'password'
+  if ([string]::IsNullOrWhiteSpace($b64)) {
+    Fail 'could not read the WinSparkle key from Vaultwarden (item: orthanc-winsparkle-dsa)'
+  }
+  $key = Join-Path (Get-Location) 'dsa_priv.pem'
+  [IO.File]::WriteAllBytes($key, [Convert]::FromBase64String($b64.Trim()))
+  try {
+    $out = & fvm dart run auto_updater:sign_update $Installer
+    if ($LASTEXITCODE -ne 0) { Fail "sign_update exited $LASTEXITCODE" }
+    return Get-DsaSignature ($out -join "`n")
+  } finally {
+    Remove-Item -Force $key -ErrorAction SilentlyContinue
+  }
+}
+
+# What scripts\publish_release.py reads to write this platform's feed item.
+function New-Handoff([string]$Version, [int]$Build, [string]$Asset, [string]$Signature, [long]$Length) {
+  [ordered]@{
+    os = 'windows'; version = $Version; build = $Build
+    asset = $Asset; signature = $Signature; length = $Length
+  } | ConvertTo-Json
+}
+
+function Get-DraftState([string]$Tag) {
+  $releases = gh release list --limit 100 --json tagName,isDraft | ConvertFrom-Json
+  return Assert-ReleaseState $releases $Tag
+}
+
+# The macOS build may create the draft in the same moment; a failed create is
+# fine when the draft is there afterwards.
+function Initialize-Release([string]$Tag) {
+  if ((Get-DraftState $Tag) -eq 'reuse') { return }
+  Write-Host "==> Creating draft release $Tag"
+  gh release create $Tag --draft --verify-tag --title $Tag --generate-notes
+  if ($LASTEXITCODE -eq 0) { return }
+  $code = $LASTEXITCODE
+  if ((Get-DraftState $Tag) -ne 'reuse') { Fail "gh release create exited $code" }
+}
+
+function Write-Utf8NoBom([string]$Path, [string]$Text) {
+  [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($false)))
+}
+
+function Publish-Release([hashtable]$Parts, [string]$Installer) {
+  $tag = "v$($Parts.Version)"
+  Initialize-Release $tag
+  $file = Get-Item $Installer
+  $signature = Get-InstallerSignature $file.FullName
+  $handoff = Join-Path $file.DirectoryName 'update-windows.json'
+  Write-Utf8NoBom $handoff (New-Handoff $Parts.Version $Parts.Build $file.Name $signature $file.Length)
+  gh release upload $tag $file.FullName $handoff --clobber
   if ($LASTEXITCODE -ne 0) { Fail "gh release upload exited $LASTEXITCODE" }
-  gh release view $Tag --json url,isDraft --jq '"==> \(.url)  draft=\(.isDraft)"'
+  Assert-SingleRelease @(gh release list --limit 100 --json tagName | ConvertFrom-Json) $tag
+  Write-Host "==> $($file.Name) and update-windows.json uploaded to the draft $tag"
 }
 
 function Main {
   Set-Location (git rev-parse --show-toplevel)
   Assert-CleanTree
-  Assert-OnReleaseBranch
-  Assert-Pushed
-  if ($Publish) { Assert-GhLoggedIn }
+  $parts = Get-VersionParts (Get-Content pubspec.yaml)
+  if ($Publish) { Assert-GhLoggedIn; Assert-TagAtHead $parts.Version }
   Set-SigningEnv
-  $version = Get-Version (Get-Content pubspec.yaml)
   & powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows.ps1
   if ($LASTEXITCODE -ne 0) { Fail "build_windows.ps1 exited $LASTEXITCODE" }
-  if ($Publish) { Publish-Release "v$version" "build\publish\erelas-setup-$version.exe" }
+  if ($Publish) { Publish-Release $parts "build\publish\erelas-setup-$($parts.Version).exe" }
 }
 
 if ($MyInvocation.InvocationName -ne '.') { Main }

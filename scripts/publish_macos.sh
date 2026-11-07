@@ -2,18 +2,22 @@
 #
 # Erelas — build, sign and notarize the macOS DMG, optionally publish it to
 # GitHub Releases. Shaped after Orthanc's publish script, without its
-# `git reset --hard` feed step and without Sparkle.
+# `git reset --hard` feed step.
 #
 # Usage:
 #   IDENTITY=<hash> scripts/publish_macos.sh             # build, sign, notarize
-#   IDENTITY=<hash> scripts/publish_macos.sh --publish   # also upload to a
+#   IDENTITY=<hash> scripts/publish_macos.sh --publish   # also upload to the
 #                                                        # DRAFT GitHub release
 #
-# --publish never makes a release public. Promote the draft yourself, after
-# looking at it:  gh release edit v<VERSION> --draft=false
+# --publish signs the DMG for Sparkle and uploads it, with update-macos.json,
+# to the draft release v<VERSION>. It never makes a release public and never
+# touches the update feed: scripts/publish_release.py does both, once the
+# Windows build has uploaded as well. TeamCity runs this on a tag build, so the
+# tag is the release decision.
 #
-# Refuses to run unless the tree is clean, on main, fully pushed, and
-# `flutter analyze` and `flutter test` pass.
+# Refuses to run unless the tree is clean and `flutter analyze` and `flutter
+# test` pass; without --publish it also wants main, fully pushed, and with
+# --publish it wants HEAD to carry the tag v<VERSION>, contained in origin/main.
 #
 # Platforms: macOS only (codesign, notarytool, hdiutil). Windows is not
 # supported here.
@@ -29,11 +33,14 @@
 #               xcrun notarytool store-credentials erelas-notary \
 #                 --apple-id <Apple ID> --team-id 2SX9WGZ5F8
 #   FLUTTER   the Flutter command (default: "fvm flutter")
+#   DART      the Dart command that runs Sparkle's signing tool (default:
+#             "fvm dart")
 set -euo pipefail
 
 APP_NAME="erelas"
 RELEASE_BRANCH="main"
 FLUTTER="${FLUTTER:-fvm flutter}"
+DART="${DART:-fvm dart}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-erelas-notary}"
 OUTPUT_DIR="build/publish"
 ENTITLEMENTS="macos/Runner/Release.entitlements"
@@ -54,6 +61,15 @@ read_version() {
   echo "$version"
 }
 
+# The build number from pubspec.yaml: "1.0.0+7" -> "7". Sparkle compares it.
+read_build() {
+  local build
+  build=$(grep -E '^version:' pubspec.yaml | head -1 \
+    | sed -E 's/^version:[[:space:]]*[0-9]+\.[0-9]+\.[0-9]+\+([0-9]+).*/\1/') || true
+  [[ "$build" =~ ^[0-9]+$ ]] || fail "pubspec.yaml version has no +build number"
+  echo "$build"
+}
+
 require_clean_tree() {
   [ -z "$(git status --porcelain)" ] \
     || fail "working tree is dirty - commit or stash first"
@@ -72,21 +88,23 @@ require_pushed() { # branch
     || fail "HEAD is not origin/$1 - push (or pull) first"
 }
 
-# A release tag must name the commit that was built. A tag that already exists
-# elsewhere would publish this build under another commit's name. The remote
+# The release is decided by a tag: it must be on origin at the commit being
+# built, and main must contain it, so what ships is what was merged. The remote
 # is asked directly, so an unreachable origin fails the check instead of
 # passing it.
-require_tag_at_head() { # tag
+require_release_tag() { # tag
   local refs sha
   refs=$(git ls-remote origin "refs/tags/$1" "refs/tags/$1^{}") \
     || fail "could not ask origin about tag $1"
-  [ -n "$refs" ] || return 0
+  [ -n "$refs" ] || fail "tag $1 is not on origin - push the tag to release"
   sha=$(printf '%s\n' "$refs" | awk '
     $2 ~ /\^\{\}$/ { peeled = $1 }
     $2 !~ /\^\{\}$/ { plain = $1 }
     END { print (peeled != "" ? peeled : plain) }')
-  [ "$sha" = "$(git rev-parse HEAD)" ] \
-    || fail "tag $1 already exists on another commit - bump the version"
+  [ "$sha" = "$(git rev-parse HEAD)" ] || fail "tag $1 is not at HEAD"
+  git fetch -q origin main || fail "could not fetch origin/main"
+  git merge-base --is-ancestor HEAD origin/main \
+    || fail "tag $1 is not contained in origin/main"
 }
 
 # Publishing needs an authenticated gh; find out before a long build.
@@ -116,13 +134,14 @@ preflight() {
   require_identity
   require_notary_profile
   require_clean_tree
-  require_branch "$RELEASE_BRANCH"
-  require_pushed "$RELEASE_BRANCH"
-  require_green_checks
   if [ "$PUBLISH" -eq 1 ]; then
     require_gh
-    require_tag_at_head "v$VERSION"
+    require_release_tag "v$VERSION"
+  else
+    require_branch "$RELEASE_BRANCH"
+    require_pushed "$RELEASE_BRANCH"
   fi
+  require_green_checks
 }
 
 build_release() {
@@ -182,22 +201,68 @@ notarize_dmg() {
   xcrun stapler validate "$DMG_PATH"
 }
 
-# Uploads the DMG to a draft release for this version, tagged at the built
-# commit. A release that already exists is reused only while it is still a
-# draft built from this same commit; a public one is never touched.
-publish_release() {
-  local tag="v$VERSION" head state
-  head=$(git rev-parse HEAD)
-  if state=$(gh release view "$tag" --json isDraft,targetCommitish \
-    --jq '"\(.isDraft) \(.targetCommitish)"'); then
-    [ "$state" = "true $head" ] \
-      || fail "release $tag exists and is not a draft at $head ($state) - delete it or bump the version"
-  else
-    echo "==> Creating draft release $tag at ${head:0:7}"
-    gh release create "$tag" --draft --title "$tag" --generate-notes \
-      --target "$head"
+# Reads sign_update's output on stdin and prints the Sparkle signature, or fails.
+signature_from() {
+  local text value
+  text=$(cat)
+  value=$(echo "$text" | sed -nE 's/.*sparkle:edSignature="([^"]+)".*/\1/p')
+  [ -n "$value" ] || fail "no signature in sign_update output: $text"
+  echo "$value"
+}
+
+# What scripts/publish_release.py reads to write this platform's feed item.
+handoff_json() { # version build asset signature length
+  printf '{"os":"macos","version":"%s","build":%s,"asset":"%s","signature":"%s","length":%s}\n' \
+    "$1" "$2" "$3" "$4" "$5"
+}
+
+# Signs the built DMG with Sparkle's key (in this Mac's keychain) and writes
+# update-macos.json beside it.
+write_handoff() {
+  local signature size
+  signature=$($DART run auto_updater:sign_update "$DMG_PATH" | signature_from)
+  size=$(wc -c < "$DMG_PATH" | tr -d ' ')
+  HANDOFF_PATH="$OUTPUT_DIR/update-macos.json"
+  handoff_json "$VERSION" "$(read_build)" "$(basename "$DMG_PATH")" "$signature" "$size" \
+    > "$HANDOFF_PATH"
+}
+
+release_is_draft() { # tag
+  [ "$(gh release view "$1" --json isDraft --jq .isDraft 2>/dev/null)" = "true" ]
+}
+
+# The tag exists already (it triggered this build). The release is created as a
+# draft unless the Windows build got there first; a failed create is fine when
+# the draft is there afterwards. A public release is never touched.
+ensure_draft() { # tag
+  local state
+  if state=$(gh release view "$1" --json isDraft --jq .isDraft 2>/dev/null); then
+    [ "$state" = "true" ] || fail "release $1 is already public - bump the version"
+    return 0
   fi
-  gh release upload "$tag" "$DMG_PATH" --clobber
+  echo "==> Creating draft release $1"
+  gh release create "$1" --draft --verify-tag --title "$1" --generate-notes \
+    || release_is_draft "$1" || fail "could not create the draft release $1"
+}
+
+# Two builds creating the draft in the same instant can each make one, splitting
+# the assets; stop loudly rather than leave that for the feed job to find.
+assert_single_release() { # tag
+  local count
+  count=$(gh release list --limit 100 --json tagName \
+    --jq "[.[] | select(.tagName == \"$1\")] | length")
+  [ "$count" = "1" ] || fail "expected exactly one release for $1, found $count - merge them by hand"
+}
+
+# Uploads the DMG and its update handoff to the draft release for this version.
+# Promoting the draft and writing the feed is publish_release.py's job, once
+# both platforms have uploaded.
+publish_release() {
+  local tag="v$VERSION"
+  ensure_draft "$tag"
+  write_handoff
+  gh release upload "$tag" "$DMG_PATH" "$HANDOFF_PATH" --clobber
+  assert_single_release "$tag"
   gh release view "$tag" --json isDraft,url,assets \
     --jq '"==> \(.url)  draft=\(.isDraft)  assets=\([.assets[].name] | join(","))"'
 }

@@ -40,6 +40,8 @@ new_repo() { # builds $REPO: a clone of a fresh origin, on main, pushed
     cd "$REPO"
     git config user.email test@example.com
     git config user.name Test
+    git config commit.gpgsign false
+    git config tag.gpgsign false
     git checkout -q -b main
     printf 'name: erelas\nversion: 1.2.3+45\n' > pubspec.yaml
     git add pubspec.yaml
@@ -91,24 +93,31 @@ actual="$(IDENTITY=ABC123 status_of require_identity)"
 expect_equal "a set IDENTITY passes" "$expected" "$actual"
 
 new_repo
-expected=0
-actual="$(status_of require_tag_at_head v1.2.3)"
-expect_equal "a tag that does not exist yet passes" "$expected" "$actual"
+expected=1
+actual="$(status_of require_release_tag v1.2.3)"
+expect_equal "a tag that is not on origin is refused" "$expected" "$actual"
 
 (cd "$REPO" && git tag v1.2.3 && git push -q origin v1.2.3)
 expected=0
-actual="$(status_of require_tag_at_head v1.2.3)"
-expect_equal "a tag at HEAD passes" "$expected" "$actual"
+actual="$(status_of require_release_tag v1.2.3)"
+expect_equal "a tag at HEAD that main contains passes" "$expected" "$actual"
 
 (cd "$REPO" && git commit -q --allow-empty -m next && git push -q origin main)
 expected=1
-actual="$(status_of require_tag_at_head v1.2.3)"
+actual="$(status_of require_release_tag v1.2.3)"
 expect_equal "a tag on an older commit is refused" "$expected" "$actual"
+
+new_repo
+(cd "$REPO" && git switch -q -c side && git commit -q --allow-empty -m side \
+  && git tag v9.9.9 && git push -q origin v9.9.9)
+expected=1
+actual="$(status_of require_release_tag v9.9.9)"
+expect_equal "a tag that main does not contain is refused" "$expected" "$actual"
 
 new_repo
 (cd "$REPO" && git remote set-url origin "$SANDBOX/does-not-exist.git")
 expected=1
-actual="$(status_of require_tag_at_head v1.2.3)"
+actual="$(status_of require_release_tag v1.2.3)"
 expect_equal "an unreachable origin is refused, not passed" "$expected" "$actual"
 
 new_repo
@@ -116,5 +125,82 @@ new_repo
 expected=1
 actual="$(status_of read_version)"
 expect_equal "a version that is not x.y.z is refused" "$expected" "$actual"
+
+new_repo
+expected="45"
+actual="$(cd "$REPO" && read_build)"
+expect_equal "the build number is read" "$expected" "$actual"
+
+expected="ABC=="
+actual="$(printf 'sparkle:edSignature="ABC==" length="9"' | signature_from)"
+expect_equal "the signature is taken from sign_update output" "$expected" "$actual"
+
+expected=1
+actual="$( (echo nothing | signature_from) >/dev/null 2>&1; echo $? )"
+expect_equal "output without a signature is refused" "$expected" "$actual"
+
+expected='{"os":"macos","version":"1.2.3","build":45,"asset":"erelas.dmg","signature":"SIG==","length":1000}'
+actual="$(handoff_json 1.2.3 45 erelas.dmg SIG== 1000)"
+expect_equal "the handoff carries what publish_release.py reads" "$expected" "$actual"
+
+# ensure_draft, with gh stubbed by a function (it shadows the real binary).
+GH_LOG="$SANDBOX/gh.log"
+gh() {
+  case "$1 $2" in
+    "release view")
+      case "$GH_STATE" in
+        draft) echo true ;;
+        public) echo false ;;
+        race) [ -f "$SANDBOX/created" ] && echo true || return 1 ;;
+        *) return 1 ;;
+      esac ;;
+    "release list") echo "$GH_COUNT" ;;
+    "release create")
+      echo create >> "$GH_LOG"
+      if [ "$GH_STATE" = race ]; then touch "$SANDBOX/created"; return 1; fi ;;
+  esac
+}
+
+run_ensure_draft() { # state -> prints "<status>:<create calls>"
+  rm -f "$GH_LOG" "$SANDBOX/created"
+  GH_STATE="$1"
+  (ensure_draft v1.2.3 >/dev/null 2>&1)
+  local status=$?
+  echo "$status:$([ -f "$GH_LOG" ] && grep -c create "$GH_LOG" || echo 0)"
+}
+
+expected="0:0"
+actual="$(run_ensure_draft draft)"
+expect_equal "an existing draft is reused, not recreated" "$expected" "$actual"
+
+expected="0:1"
+actual="$(run_ensure_draft missing)"
+expect_equal "a missing release is created as a draft" "$expected" "$actual"
+
+expected="1:0"
+actual="$(run_ensure_draft public)"
+expect_equal "a public release is refused" "$expected" "$actual"
+
+expected="0:1"
+actual="$(run_ensure_draft race)"
+expect_equal "a create lost to the other platform's build is accepted" "$expected" "$actual"
+
+run_single_release() { # count -> prints the status
+  GH_COUNT="$1"
+  (assert_single_release v1.2.3 >/dev/null 2>&1)
+  echo $?
+}
+
+expected=0
+actual="$(run_single_release 1)"
+expect_equal "exactly one release for the tag passes" "$expected" "$actual"
+
+expected=1
+actual="$(run_single_release 2)"
+expect_equal "two releases for one tag are refused" "$expected" "$actual"
+
+expected=1
+actual="$(run_single_release 0)"
+expect_equal "no release for the tag is refused" "$expected" "$actual"
 
 exit "$FAILED"
