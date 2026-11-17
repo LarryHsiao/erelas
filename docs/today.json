@@ -1,52 +1,52 @@
 {
   "v": 1,
   "source": "TWSE",
-  "asOf": "2026-11-17T00:30:00+08:00",
+  "asOf": "2026-11-18T00:30:17+08:00",
   "index": {
-    "date": "2026-11-13",
+    "date": "2026-11-16",
     "name": "發行量加權股價指數",
-    "close": 43675.12,
-    "change": 583.25,
-    "changePct": 1.35
+    "close": 41040.08,
+    "change": -2635.04,
+    "changePct": -6.03
   },
   "ticker": {
-    "date": "2026-11-13",
+    "date": "2026-11-16",
     "items": [
       {
         "name": "電子工業類指數",
-        "close": 2692.95,
-        "change": 31.84,
-        "changePct": 1.2
+        "close": 2512.06,
+        "change": -180.89,
+        "changePct": -6.72
       },
       {
         "name": "半導體類指數",
-        "close": 1480.33,
-        "change": 17.92,
-        "changePct": 1.23
+        "close": 1386.65,
+        "change": -93.68,
+        "changePct": -6.33
       },
       {
         "name": "金融保險類指數",
-        "close": 3744.99,
-        "change": 79.01,
-        "changePct": 2.16
+        "close": 3617.63,
+        "change": -127.36,
+        "changePct": -3.4
       },
       {
         "name": "臺灣50指數",
-        "close": 40820.37,
-        "change": 493.63,
-        "changePct": 1.22
+        "close": 38255.29,
+        "change": -2565.08,
+        "changePct": -6.28
       },
       {
         "name": "航運類指數",
-        "close": 215.9,
-        "change": 4.04,
-        "changePct": 1.91
+        "close": 214.49,
+        "change": -1.41,
+        "changePct": -0.65
       },
       {
         "name": "塑膠類指數",
-        "close": 472.57,
-        "change": 17.53,
-        "changePct": 3.85
+        "close": 431.69,
+        "change": -40.88,
+        "changePct": -8.65
       }
     ]
   },
